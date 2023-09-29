@@ -1,4 +1,4 @@
-from Functions import *
+from functions import *
 
 class VarMat:
     def __init__(self, name = "NA", val = 0.0):
