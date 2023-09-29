@@ -1,5 +1,7 @@
 # Functions file for Power FLow 4205 Project
-
+from Classes import *
+import numpy as np
+import matplotlib.pyplot as plt
 
 def getInitMats(busnum, xmat, knowns):
     for i in range(busnum):
