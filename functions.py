@@ -2,6 +2,7 @@
 from classes import *
 import numpy as np
 import matplotlib.pyplot as plt
+import cmath
 
 """
 Function: get initial matrices
@@ -15,9 +16,13 @@ Parameters:
 Returns:
     known - the filled known matrix with name and values
     xmat - the filled unknown matrix with name only
+    pcount - amount of known Ps
+    qcount - amount of known Qs
 """
 
 def getInitMats(knownNum, xmat, knowns):
+    pcount = 0
+    qcount = 0
     for i in range(knownNum):
 
         knowns[i].name = input("Enter known #" + str(i + 1) + ": ")
@@ -27,10 +32,12 @@ def getInitMats(knownNum, xmat, knowns):
         if "p" in knowns[i].name or "P" in knowns[i].name:
             xmat[i].name = "T" + numvar
             knowns[i].name = "P" + numvar
+            pcount += 1
         elif "q" in knowns[i].name or "Q" in knowns[i].name:
             xmat[i].name = "V" + numvar
             knowns[i].name = "Q" + numvar
-    return knowns, xmat
+            qcount += 1
+    return knowns, xmat, pcount, qcount
 
 """
 Function: Set initial guess
@@ -139,3 +146,76 @@ def calcYbus(busnum, yBus, zBus):
                 else:
                     yBus[i][j].val = complex(0, 0)
     return yBus
+
+#NOT DONE
+#FIXME: not sure what im doing with this yes
+def getVmat(busnum):
+    vMat = [VarMat() for i in range(int(busnum))]
+    for j in range(busnum):
+        vMat[j].name = "V" + j
+        a = float(input("Whats the abs value of V" + j + "?: "))
+        #b = float(input("Whats the angle value of V"+ j + "?: "))
+        vMat[j].val = a
+    return vMat
+
+'''
+Function: calculate uij
+'''
+def uij(gij,bij,thetai,thetaj):
+    return (gij*np.sin(thetai-thetaj)-bij*np.cos(thetai-thetaj))
+
+'''
+Function: calculate tij
+'''
+def tij(gij,bij,thetai,thetaj):
+    return (gij*np.cos(thetai-thetaj)+bij*np.sin(thetai-thetaj))
+
+'''
+Function: calculate P value
+'''
+def calcPVal(num, yBus, knownNum, T, V):
+    p = V[num]^2 * yBus[num][num].val[0]
+    for j in range(knownNum):
+        p -= V[num] * V[j] * tij(yBus[num][j].val[0], yBus[num][j].val[1], T[num], T[j])
+    return p
+
+'''
+Function: calculate Q value
+'''
+def calcQVal(num, yBus, knownNum, T, V):
+    q = -V[num]^2 * yBus[num][num].val[1]
+    for j in range(knownNum):
+        q -= V[num] * V[j] * uij(yBus[num][j].val[0], yBus[num][j].val[1], T[num], T[j])
+    return q
+
+'''
+Function: calculate partial derivative dPi / dQi
+'''
+def dpidqi(i, V, yBus, T, knownNum):
+    sum = 0
+    for j in range(knownNum):
+        if j != i:
+            sum += V[i] * V[j] * uij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+    return sum
+
+'''
+Function: calculate partial derivative dPi / dQj
+'''
+def dpidqj(i, V, yBus, T, j):
+    return -V[i] * V[j] * uij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+
+'''
+Function: calculate partial derivative dPi / dVi
+'''
+def dpidvi(i, V, yBus, T, knownnum):
+    sum = 2 * V[i] * yBus[i][i].val[0]
+    for j in range(knownnum):
+        if j != i:
+            sum += V[j] * tij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+    return sum
+
+'''
+Function: calculate partial derivative dPi / dQj
+'''
+def dpidvj(i, j, V, yBus, T):
+    return -V[i]*tij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])

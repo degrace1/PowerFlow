@@ -22,6 +22,8 @@ def main():
     startMats = getInitMats(knownNum, xmat, knowns)
     knowns = startMats[0]
     xmat = startMats[1]
+    pcount = startMats[2]
+    qcount = startMats[3]
     printMat(knownNum, xmat)
 
     printMat(knownNum, knowns)
@@ -39,6 +41,8 @@ def main():
 
     yBus = calcYbus(busnum, yBus, zBus)
     printMultiMat(busnum, yBus)
+
+
 
 
 if __name__ == "__main__":
