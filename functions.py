@@ -9,7 +9,7 @@ This function asks the user to input the initial knowns (P, Q) and their associa
 If the user inputs a P, a T for delta/angle will be added to the unknown matrix. If a Q is
 entered, a V will be added.
 Parameters:
-    busnum - total number of buses in system
+    knownNum - total number of known Ps and Qs to ask for
     xmat - empty matrix of size busnum rows and 1 column (unknowns matrix)
     knowns - empty matrix of size busnum rows and 1 column (knowns matrix)
 Returns:
@@ -17,8 +17,8 @@ Returns:
     xmat - the filled unknown matrix with name only
 """
 
-def getInitMats(busnum, xmat, knowns):
-    for i in range(busnum):
+def getInitMats(knownNum, xmat, knowns):
+    for i in range(knownNum):
 
         knowns[i].name = input("Enter known #" + str(i + 1) + ": ")
         knowns[i].val = input("Enter associated known value: ")
@@ -36,13 +36,13 @@ def getInitMats(busnum, xmat, knowns):
 Function: Set initial guess
 This function sets the initial guesses of 1.0pu for voltage and 0 for angle
 Parameters:
-    busnum - number of buses in the system
+    knownnum - number of knowns in the system
     xmat - matrix of unknowns with only names
 Returns
     xmat - matrix of unknowns with names and initial guesses
 """
-def setInitGuess(busnum, xmat):
-    for i in range(int(busnum)):
+def setInitGuess(knownNum, xmat):
+    for i in range(int(knownNum)):
         if "V" in xmat[i].name:
             xmat[i].val = 1
         elif "T" in xmat[i].name:
@@ -53,27 +53,27 @@ def setInitGuess(busnum, xmat):
 Function: print matrix
 This will print a known or unknown matrix (rows amount = busnum, column = 1)
 Parameters:
-    busnum - number of buses for rows in matrix
+    num - number of elem for rows in matrix
     xmat - matrix
 Returns:
     nothing, just print
 """
-def printMat(busnum, xmat):
-    for i in range(int(busnum)):
+def printMat(num, xmat):
+    for i in range(int(num)):
         print(xmat[i].name + ", " + str(xmat[i].val))
 
 """
 Function: print matrix
 This will print a matrix (probably Ybus) (rows & columns amount = busnum)
 Parameters:
-    busnum - number of buses for rows and columns in matrix
+    num - number of elem for rows and columns in matrix
     xmat - matrix
 Returns:
     nothing, just print
 """
-def printMultiMat(busnum, mat):
-    for i in range(int(busnum)):
-        for j in range(int(busnum)):
+def printMultiMat(num, mat):
+    for i in range(int(num)):
+        for j in range(int(num)):
             print(mat[i][j].name + ", " + str(mat[i][j].val))
 
 """
@@ -95,8 +95,8 @@ def getZYbus(busnum, yBus, zBus):
             yBus[i][j].name = "Y" + str(i + 1) + str(j + 1)
             # ask for "zbus" values
             if j != i:
-                if zBus[j][i] != complex(0, 0) or zBus[i][j] != 0:
-                    zBus[i][j] = zBus[i][j]
+                if zBus[j][i] != complex(0, 0) or zBus[j][i] != 0:
+                    zBus[i][j] = zBus[j][i]
                 else:
                     print("Please enter zero if there is no bus")
                     a = float(input("Enter z" + str(i + 1) + str(j + 1) + " a value: "))
@@ -114,23 +114,27 @@ Parameters:
 Returns:
     yBus - filled in with values
 """
-##FIXME: not acquiring the diagnol elements?
+
 def calcYbus(busnum, yBus, zBus):
     num = int(busnum)
-    for i in range(num):
-        for j in range(num):
+    for i in range(num): # row number
+        for j in range(num): # column number
             # calc diagnol
             if i == j:
                 sum = 0
                 for k in range(num):
-                    if k != i and zBus[i][k] != complex(0, 0) and zBus[i][j] != 0:
+                    # loop through other numbers and check if its not the same as self
+                    # check if impedance i,k isn't zero (avoid inf zero)
+                    if k != i and zBus[i][k] != complex(0, 0) and zBus[i][k] != 0:
+                        # if true add that value to sum
                         sum += 1 / zBus[i][k]
-                if sum == 0:
+                if sum == 0: #set to zero
                     yBus[i][j].val = complex(0, 0)
-                else:
+                else: #set to value
                     yBus[i][j].val = sum
-            else:
-                if zBus[i][k] != complex(0, 0) and zBus[i][j] != 0:
+            else: #if its not a diagnol element
+                #check that its not zero to avoid inf zero
+                if zBus[i][j] != complex(0, 0) and zBus[i][j] != 0:
                     yBus[i][j].val = -1 / zBus[i][j]
                 else:
                     yBus[i][j].val = complex(0, 0)

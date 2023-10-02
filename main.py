@@ -3,20 +3,30 @@ import matplotlib.pyplot as plt
 from classes import *
 from functions import *
 
+'''
+Variables:
+    numbers:
+        busnum
+        knownNum
+    matrices:
+        knowns
+        xmat
+        
+'''
 
 def main():
     busnum = int(input("Enter number of buses: "))
-    knowns = [VarMat() for i in range(int(busnum))]
-    xmat = [VarMat() for j in range(int(busnum))]
-    startMats = getInitMats(busnum, xmat, knowns)
+    knownNum = int(input("Enter number of known P&Qs: "))
+    knowns = [VarMat() for i in range(int(knownNum))]
+    xmat = [VarMat() for j in range(int(knownNum))]
+    startMats = getInitMats(knownNum, xmat, knowns)
     knowns = startMats[0]
     xmat = startMats[1]
+    printMat(knownNum, xmat)
 
-    printMat(busnum, xmat)
+    printMat(knownNum, knowns)
 
-    printMat(busnum, knowns)
-
-    xmat = setInitGuess(busnum, xmat)
+    xmat = setInitGuess(knownNum, xmat)
 
     printMat(busnum, xmat)
 
