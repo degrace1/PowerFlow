@@ -65,6 +65,11 @@ def main():
 
     calcYbus(busnum, yBus, zBus)
     printMultiMat(busnum, yBus)
+    jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
+    nameJacElem(knownnum, knowns, xmat, jacobian)
+    calcJacElem()
+
+
 
 
 
