@@ -1,45 +1,50 @@
 # Functions file for Power FLow 4205 Project
 from classes import *
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import cmath
-"anais comment"
+
 """
 Function: get initial matrices
 This function asks the user to input the initial knowns (P, Q) and their associated value.
 If the user inputs a P, a T for delta/angle will be added to the unknown matrix. If a Q is
 entered, a V will be added.
 Parameters:
-    knownNum - total number of known Ps and Qs to ask for
+    busnum - total number of buses
     xmat - empty matrix of size busnum rows and 1 column (unknowns matrix)
     knowns - empty matrix of size busnum rows and 1 column (knowns matrix)
+    p_list - p vals
+    q_list - q vals
 Returns:
     known - the filled known matrix with name and values
     xmat - the filled unknown matrix with name only
-    pcount - amount of known Ps
-    qcount - amount of known Qs
-"""
-
-def getInitMats(knownNum, xmat, knowns):
-    pcount = 0
-    qcount = 0
-    for i in range(knownNum):
-
-        knowns[i].name = input("Enter known #" + str(i + 1) + ": ")
-        knowns[i].val = input("Enter associated known value: ")
-        numvar = str(knowns[i].name)[1]
-
-        if "p" in knowns[i].name or "P" in knowns[i].name:
-            xmat[i].name = "T" + numvar
-            knowns[i].name = "P" + numvar
-            pcount += 1
-        elif "q" in knowns[i].name or "Q" in knowns[i].name:
-            xmat[i].name = "V" + numvar
-            knowns[i].name = "Q" + numvar
-            qcount += 1
-    return knowns, xmat, pcount, qcount
 
 """
+
+def getInitMats(xmat, knowns, p_list, q_list, busnum):
+    sumcount = 0
+    for i in range(busnum):
+        # check if there is a value for initial P
+        # add a T to the xmat and a P to the knowns
+        if np.isnan(p_list[i]) == False:
+            xmat[sumcount].name = "T" + str(i+1)
+            knowns[sumcount].name = "P" + str(i+1)
+            knowns[sumcount].val = p_list[i]
+            sumcount += 1
+            print(sumcount)
+    newcount = 0
+    for j in range(busnum):
+        # check if there is a value for initial Q
+        # add a V to the xmatrix and a Q to the knowns
+        if np.isnan(q_list[j]) == False:
+            xmat[newcount + sumcount].name = "V" + str(j + 1)
+            knowns[newcount + sumcount].name = "Q" + str(j + 1)
+            knowns[newcount + sumcount].val = q_list[j]
+            newcount+=1
+
+
+""" NOT USED - OBSOLETE
 Function: Set initial guess
 This function sets the initial guesses of 1.0pu for voltage and 0 for angle
 Parameters:
@@ -78,6 +83,7 @@ Parameters:
 Returns:
     nothing, just print
 """
+
 def printMultiMat(num, mat):
     for i in range(int(num)):
         for j in range(int(num)):
@@ -96,7 +102,8 @@ Returns:
     yBus - filled with names of the ybus for later use
     zBus - filled with values from user (complex #s)
 """
-def getZYbus(busnum, yBus, zBus):
+def getZYbus(busnum, yBus, zBus, z_imp):
+    countz = 0
     for i in range(int(busnum)):
         for j in range(int(busnum)):
             yBus[i][j].name = "Y" + str(i + 1) + str(j + 1)
@@ -105,11 +112,12 @@ def getZYbus(busnum, yBus, zBus):
                 if zBus[j][i] != complex(0, 0) or zBus[j][i] != 0:
                     zBus[i][j] = zBus[j][i]
                 else:
-                    print("Please enter zero if there is no bus")
-                    a = float(input("Enter z" + str(i + 1) + str(j + 1) + " a value: "))
-                    b = float(input("Enter z" + str(i + 1) + str(j + 1) + " b value: "))
-                    zBus[i][j] = complex(a, b)
-    return yBus, zBus
+                    if z_imp.loc[countz, 'line'] == int(str(i+1)+str(j+1)):
+                        a = z_imp.loc[countz, 'R']
+                        b = z_imp.loc[countz, 'X']
+                        countz += 1
+                        zBus[i][j] = complex(a, b)
+
 
 """
 Function: calculate yBus
@@ -145,18 +153,7 @@ def calcYbus(busnum, yBus, zBus):
                     yBus[i][j].val = -1 / zBus[i][j]
                 else:
                     yBus[i][j].val = complex(0, 0)
-    return yBus
 
-#NOT DONE
-#FIXME: not sure what im doing with this yes
-def getVmat(busnum):
-    vMat = [VarMat() for i in range(int(busnum))]
-    for j in range(busnum):
-        vMat[j].name = "V" + j
-        a = float(input("Whats the abs value of V" + j + "?: "))
-        #b = float(input("Whats the angle value of V"+ j + "?: "))
-        vMat[j].val = a
-    return vMat
 
 '''
 Function: calculate uij
@@ -189,19 +186,19 @@ def calcQVal(num, yBus, knownNum, T, V):
     return q
 
 '''
-Function: calculate partial derivative dPi / dQi
+Function: calculate partial derivative dPi / dTi
 '''
-def dpidqi(i, V, yBus, T, knownNum):
+def dpidti(i, V, yBus, T, knownNum):
     sum = 0
     for j in range(knownNum):
         if j != i:
-            sum += V[i] * V[j] * uij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
-    return sum
+            sum += V[j] * uij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+    return sum * V[i]
 
 '''
-Function: calculate partial derivative dPi / dQj
+Function: calculate partial derivative dPi / dTj
 '''
-def dpidqj(i, V, yBus, T, j):
+def dpidtj(i, V, yBus, T, j):
     return -V[i] * V[j] * uij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
 
 '''
@@ -219,3 +216,65 @@ Function: calculate partial derivative dPi / dQj
 '''
 def dpidvj(i, j, V, yBus, T):
     return -V[i]*tij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+
+'''
+Function: calculate partial derivative dQi / dTi
+
+'''
+def dqidti(i, V, yBus, T, knownNum):
+    sum = 0
+    for j in range(knownNum):
+        if j != i:
+            sum += V[j] * tij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+    return sum * -V[i]
+
+'''
+Function: calculate partial derivative dQi / dTj
+
+'''
+def dqidtj(i, j, V, yBus, T):
+    return V[i] * V[j] * tij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+
+'''
+Function: calculate partial derivative dQi / dVi
+'''
+def dqidvi(i, V, yBus, T, knownnum):
+    sum = -2 * V[i] * yBus[i][i].val[1]
+    for j in range(knownnum):
+        if j != i:
+            sum += -V[j] * uij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+    return sum
+
+'''
+Function: calculate partial derivative dQi / dVj
+'''
+def dqidvj(i, j, V, yBus, T):
+    return -V[i]*uij(yBus[i][j].val[0], yBus[i][j].val[1], T[i], T[j])
+
+
+def calcJacElem(knownnum, knowns, xmat, jacobian):
+    for i in range(knownnum):
+        for j in range(knownnum):
+            #Ps
+            if knowns[i].name[0] == 'P' and xmat[j].name[0] == 'T':
+                if knowns[i].name[1] == xmat[j].name[1]:
+                    #use dpidti
+                    jacobian[i][j] = dpidti()
+                else:
+                    #use dpidtj
+            if knowns[i].name[0] == 'P' and xmat[j].name[0] == 'V':
+                if knowns[i].name[1] == xmat[j].name[1]:
+                    #use dpidvi
+                else:
+                    #use dpidvj
+            #Qs
+            if knowns[i].name[0] == 'Q' and xmat[j].name[0] == 'T':
+                if knowns[i].name[1] == xmat[j].name[1]:
+                    # use dqidti
+                else:
+                    # use dqidtj
+            if knowns[i].name[0] == 'Q' and xmat[j].name[0] == 'V':
+                if knowns[i].name[1] == xmat[j].name[1]:
+                    # use dqidvi
+                else:
+                    # use dqidvj
