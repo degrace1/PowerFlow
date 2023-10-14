@@ -64,10 +64,16 @@ def main():
     print(zBus)
 
     calcYbus(busnum, yBus, zBus)
-    printMultiMat(busnum, yBus)
+    printMultiMat(busnum, yBus, False)
+    print("first element of y bus real part is: ", yBus[0][0].val.real)
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
-    calcJacElem()
+    print("empty jacobian: ")
+    printMultiMat(knownnum, jacobian, True)
+    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat)
+    print("filled jacobian: ")
+    printMultiMat(knownnum, jacobian, True)
+    printMat(knownnum, xmat)
 
 
 
