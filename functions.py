@@ -176,10 +176,10 @@ def tij(gij, bij, thetai, thetaj):
 Function: calculate P value
 '''
 #FIXME: added knowns matrix so we can just change the value directly inside? or not because we need to add to old p
-def calcPVal(num, yBus, knownNum, T, V):
+def calcPVal(num, yBus, busnum, T, V):
     num = int(num)
     p = V[num] ** 2 * yBus[num][num].val.real
-    for j in range(int(knownNum)):
+    for j in range(int(busnum)):
         p -= V[num] * V[j] * tij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
     return p
 
@@ -187,10 +187,10 @@ def calcPVal(num, yBus, knownNum, T, V):
 '''
 Function: calculate Q value
 '''
-def calcQVal(num, yBus, knownNum, T, V):
+def calcQVal(num, yBus, busnum, T, V):
     num = int(num)
     q = -V[num] ** 2 * yBus[num][num].val.imag
-    for j in range(knownNum):
+    for j in range(busnum):
         q -= V[num] * V[j] * uij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
     return q
 
@@ -198,10 +198,10 @@ def calcQVal(num, yBus, knownNum, T, V):
 '''
 Function: calculate partial derivative dPi / dTi
 '''
-def dpidti(i, V, yBus, T, knownNum):
+def dpidti(i, V, yBus, T, busnum):
     i = int(i)
     sum = 0
-    for j in range(knownNum):
+    for j in range(busnum):
         if j != i:
             sum += V[j] * uij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
     return sum * V[i]
@@ -219,10 +219,10 @@ def dpidtj(i, j, V, yBus, T):
 '''
 Function: calculate partial derivative dPi / dVi
 '''
-def dpidvi(i, V, yBus, T, knownnum):
+def dpidvi(i, V, yBus, T, busnum):
     i = int(i)
     sum = 2 * V[i] * yBus[i][i].val.real
-    for j in range(knownnum):
+    for j in range(busnum):
         if j != i:
             sum += V[j] * tij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
     return sum
@@ -241,10 +241,10 @@ def dpidvj(i, j, V, yBus, T):
 Function: calculate partial derivative dQi / dTi
 
 '''
-def dqidti(i, V, yBus, T, knownNum):
+def dqidti(i, V, yBus, T, busnum):
     i = int(i)
     sum = 0
-    for j in range(knownNum):
+    for j in range(busnum):
         if j != i:
             sum += V[j] * tij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
     return sum * -V[i]
@@ -263,10 +263,10 @@ def dqidtj(i, j, V, yBus, T):
 '''
 Function: calculate partial derivative dQi / dVi
 '''
-def dqidvi(i, V, yBus, T, knownnum):
+def dqidvi(i, V, yBus, T, busnum):
     i = int(i)
     sum = -2 * V[i] * yBus[i][i].val.imag
-    for j in range(knownnum):
+    for j in range(busnum):
         if j != i:
             sum += -V[j] * uij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
     return sum
@@ -319,7 +319,7 @@ def nameJacElem(knownnum, knowns, xmat, jacobian):
 '''
 Function: calculate jacobian elements and update matrix
 '''
-def calcJacElems(knownnum, jacobian, ybus, t_list, v_list):
+def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
     for i in range(knownnum):
         for j in range(knownnum):
             # Ps
@@ -327,19 +327,19 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list):
             i_temp = int(jacobian[i][j].name[2])-1
             j_temp = int(jacobian[i][j].name[5])-1
             if jacobian[i][j].type == 'dpidti':
-                jacobian[i][j].val = dpidti(i_temp, v_list, ybus, t_list, knownnum)
+                jacobian[i][j].val = dpidti(i_temp, v_list, ybus, t_list, busnum)
             elif jacobian[i][j].type == 'dpidtj':
                 jacobian[i][j].val = dpidtj(i_temp, j_temp, v_list, ybus, t_list)
             elif jacobian[i][j].type == 'dpidvi':
-                jacobian[i][j].val = dpidvi(i_temp, v_list, ybus, t_list, knownnum)
+                jacobian[i][j].val = dpidvi(i_temp, v_list, ybus, t_list, busnum)
             elif jacobian[i][j].type == 'dpidvj':
                 jacobian[i][j].val = dpidvj(i_temp, j_temp, v_list, ybus, t_list)
             elif jacobian[i][j].type == 'dqidti':
-                jacobian[i][j].val = dqidti(i_temp, v_list, ybus, t_list, knownnum)
+                jacobian[i][j].val = dqidti(i_temp, v_list, ybus, t_list, busnum)
             elif jacobian[i][j].type == 'dqidtj':
                 jacobian[i][j].val = dqidtj(i_temp, j_temp, v_list, ybus, t_list)
             elif jacobian[i][j].type == 'dqidvi':
-                jacobian[i][j].val = dqidvi(i_temp, v_list, ybus, t_list, knownnum)
+                jacobian[i][j].val = dqidvi(i_temp, v_list, ybus, t_list, busnum)
             elif jacobian[i][j].type == 'dqidvj':
                 jacobian[i][j].val = dqidvj(i_temp, j_temp, v_list, ybus, t_list)
             else:
@@ -349,9 +349,9 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list):
 Function: iterate
 should update P, Q, known matrix, unknown matrix, and jacobian
 '''
-def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat):
+def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT, numV):
     #first calculate the jacobian matrix
-    calcJacElems(knownnum, jacobian, ybus, t_list, v_list)
+    calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
     new_knowns = [0 for i in range(knownnum)]
     for i in range(knownnum):
@@ -362,10 +362,10 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat):
         type = knowns[i].name[0]
         if type == 'P':
             #FIXME: P may be negative. will we write this in the excel? or add it in the code?
-            new_knowns[i] = new_knowns[i] - calcPVal(num, ybus, knownnum, t_list, v_list)
+            new_knowns[i] = new_knowns[i] - calcPVal(num, ybus, busnum, t_list, v_list)
         else:
             #FIXME: same as P
-            new_knowns[i] = new_knowns[i] - calcQVal(num, ybus, knownnum, t_list, v_list)
+            new_knowns[i] = new_knowns[i] - calcQVal(num, ybus, busnum, t_list, v_list)
     #now solve for the new values
     #get temp jac of just values oops
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
@@ -375,3 +375,8 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat):
     new = np.linalg.solve(temp_jac, new_knowns)
     for j in range(knownnum):
         xmat[j].val += new[j]
+        # need to update t_list and v_list as well :(
+    #for k in range(numT):
+        #update T list
+    #for p in range(numV)
+        #update V list

@@ -38,6 +38,8 @@ def main():
 
     numP = initial.loc[:, 'P'].count()
     numQ = initial.loc[:, 'Q'].count()
+    numT = numP
+    numV = numQ
     knownnum = numP + numQ
     line_z = pd.read_excel('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr.xlsx', sheet_name='line_imp')
 
@@ -70,7 +72,7 @@ def main():
     nameJacElem(knownnum, knowns, xmat, jacobian)
     print("empty jacobian: ")
     printMultiMat(knownnum, jacobian, True)
-    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat)
+    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, numT, numV)
     print("filled jacobian: ")
     printMultiMat(knownnum, jacobian, True)
     printMat(knownnum, xmat)
