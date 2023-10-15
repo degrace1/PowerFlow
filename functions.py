@@ -178,12 +178,14 @@ def tij(gij, bij, thetai, thetaj):
 '''
 Function: calculate P value
 '''
+#FIXME: signs messed up in tij uij, gij, bij
 def calcPVal(num, yBus, busnum, T, V):
     num = int(num)
-    p = V[num] ** 2 * yBus[num][num].val.real
+    p = (V[num]**2) * yBus[num][num].val.real
+    sum = 0
     for j in range(int(busnum)):
-        p -= V[num] * V[j] * tij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
-    return p
+        sum += V[j] * tij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
+    return p + (-V[num] * sum)
 
 
 '''
@@ -191,7 +193,7 @@ Function: calculate Q value
 '''
 def calcQVal(num, yBus, busnum, T, V):
     num = int(num)
-    q = -V[num] ** 2 * yBus[num][num].val.imag
+    q = -(V[num]**2) * -yBus[num][num].val.imag
     for j in range(busnum):
         q -= V[num] * V[j] * uij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
     return q
@@ -366,19 +368,22 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT
         if type == 'P':
             #FIXME: P may be negative. will we write this in the excel? or add it in the code?
             # subtractions may be wrong
-            new_knowns[i] = -calcPVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
+            new_p = calcPVal(num, ybus, busnum, t_list, v_list)
+            new_knowns[i] = -new_p - new_knowns[i]
         else:
             #FIXME: same as P
             # subtractions may be wrong
             new_knowns[i] = -calcQVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
     #now solve for the new values
     #get temp jac of just values oops
+
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
         for j in range(knownnum):
             temp_jac[i][j] = jacobian[i][j].val
     new = np.linalg.solve(temp_jac, new_knowns)
     for j in range(knownnum):
+        print("first element new vector: ", new[j])
         xmat[j].val += new[j]
         temp_num = int(xmat[j].name[1])
         if xmat[j].name[0] == "T":
