@@ -153,6 +153,7 @@ def calcYbus(busnum, yBus, zBus):
             else:  # if its not a diagnol element
                 # check that its not zero to avoid inf zero
                 if zBus[i][j] != complex(0, 0) and zBus[i][j] != 0:
+                    #FIXME: should this be negative or not?
                     yBus[i][j].val = -1 / zBus[i][j]
                 else:
                     yBus[i][j].val = complex(0, 0)
@@ -162,20 +163,21 @@ def calcYbus(busnum, yBus, zBus):
 Function: calculate uij
 '''
 def uij(gij, bij, thetai, thetaj):
-    return (gij * np.sin(thetai - thetaj) - bij * np.cos(thetai - thetaj))
+    #fixme: negatives?
+    return (-gij * np.sin(thetai - thetaj) - (-bij * np.cos(thetai - thetaj)))
 
 
 '''
 Function: calculate tij
 '''
 def tij(gij, bij, thetai, thetaj):
-    return (gij * np.cos(thetai - thetaj) + bij * np.sin(thetai - thetaj))
+    #fixme: negatives?
+    return (-gij * np.cos(thetai - thetaj) + (-bij * np.sin(thetai - thetaj)))
 
 
 '''
 Function: calculate P value
 '''
-#FIXME: added knowns matrix so we can just change the value directly inside? or not because we need to add to old p
 def calcPVal(num, yBus, busnum, T, V):
     num = int(num)
     p = V[num] ** 2 * yBus[num][num].val.real
@@ -224,7 +226,7 @@ def dpidvi(i, V, yBus, T, busnum):
     sum = 2 * V[i] * yBus[i][i].val.real
     for j in range(busnum):
         if j != i:
-            sum += V[j] * tij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
+            sum += -V[j] * tij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
     return sum
 
 
@@ -268,6 +270,7 @@ def dqidvi(i, V, yBus, T, busnum):
     sum = -2 * V[i] * yBus[i][i].val.imag
     for j in range(busnum):
         if j != i:
+            temp = uij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
             sum += -V[j] * uij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
     return sum
 
@@ -362,10 +365,12 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT
         type = knowns[i].name[0]
         if type == 'P':
             #FIXME: P may be negative. will we write this in the excel? or add it in the code?
-            new_knowns[i] = new_knowns[i] - calcPVal(num, ybus, busnum, t_list, v_list)
+            # subtractions may be wrong
+            new_knowns[i] = -calcPVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
         else:
             #FIXME: same as P
-            new_knowns[i] = new_knowns[i] - calcQVal(num, ybus, busnum, t_list, v_list)
+            # subtractions may be wrong
+            new_knowns[i] = -calcQVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
     #now solve for the new values
     #get temp jac of just values oops
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
@@ -375,8 +380,10 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT
     new = np.linalg.solve(temp_jac, new_knowns)
     for j in range(knownnum):
         xmat[j].val += new[j]
-        # need to update t_list and v_list as well :(
-    #for k in range(numT):
-        #update T list
-    #for p in range(numV)
-        #update V list
+        temp_num = int(xmat[j].name[1])
+        if xmat[j].name[0] == "T":
+            t_list[temp_num-1] = xmat[j].val
+        elif xmat[j].name[0] == "V":
+            v_list[temp_num-1] = xmat[j].val
+        else:
+            print("error thrown in updating v and t lists")
