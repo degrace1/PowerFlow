@@ -23,8 +23,12 @@ def main():
     #extract v and theta values and sub in 0 or 1 for first guess
     v_list = initial.loc[:, 'V'].to_numpy()
     v_list[np.isnan(v_list)] = 1
+    v_list = np.array(v_list)
+    v_list = v_list.astype('float64')
     t_list = initial.loc[:, 'T'].to_numpy()
     t_list[np.isnan(t_list)] = 0
+    t_list = np.array(t_list)
+    t_list = t_list.astype('float64')
     #extract p and q list
     #adds NANs to spots where there is no initial
     p_list = initial.loc[:, 'P'].to_numpy()
@@ -52,6 +56,8 @@ def main():
 
     printMat(knownnum, xmat)
     getInitMats(xmat, knowns, p_list, q_list, busnum)
+    setInitGuess(knownnum, xmat)
+    print("initial empty xmat")
     printMat(knownnum, xmat)
     #printMat(knownNum, knowns)
 
@@ -72,9 +78,17 @@ def main():
     nameJacElem(knownnum, knowns, xmat, jacobian)
     print("empty jacobian: ")
     printMultiMat(knownnum, jacobian, True)
+    #iterate #1
     iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, numT, numV)
     print("filled jacobian: ")
     printMultiMat(knownnum, jacobian, True)
+    print("New voltage angles and magnitudes")
+    printMat(knownnum, xmat)
+    #iterate #2
+    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, numT, numV)
+    print("filled jacobian: ")
+    printMultiMat(knownnum, jacobian, True)
+    print("New voltage angles and magnitudes")
     printMat(knownnum, xmat)
 
 

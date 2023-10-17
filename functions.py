@@ -43,7 +43,7 @@ def getInitMats(xmat, knowns, p_list, q_list, busnum):
             newcount += 1
 
 
-""" NOT USED - OBSOLETE
+"""
 Function: Set initial guess
 This function sets the initial guesses of 1.0pu for voltage and 0 for angle
 Parameters:
@@ -58,7 +58,6 @@ def setInitGuess(knownNum, xmat):
             xmat[i].val = 1
         elif "T" in xmat[i].name:
             xmat[i].val = 0
-    return xmat
 
 
 """
@@ -184,7 +183,8 @@ def calcPVal(num, yBus, busnum, T, V):
     p = (V[num]**2) * yBus[num][num].val.real
     sum = 0
     for j in range(int(busnum)):
-        sum += V[j] * tij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
+        if j != num:
+            sum += V[j] * tij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
     return p + (-V[num] * sum)
 
 
@@ -193,10 +193,12 @@ Function: calculate Q value
 '''
 def calcQVal(num, yBus, busnum, T, V):
     num = int(num)
-    q = -(V[num]**2) * -yBus[num][num].val.imag
+    q = -(V[num]**2) * yBus[num][num].val.imag
+    sum = 0
     for j in range(busnum):
-        q -= V[num] * V[j] * uij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
-    return q
+        if j != num:
+            sum += V[j] * uij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
+    return q + (-V[num] * sum)
 
 
 '''
@@ -359,6 +361,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT
     calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
     new_knowns = [0 for i in range(knownnum)]
+
     for i in range(knownnum):
         new_knowns[i] = knowns[i].val
     for i in range(knownnum):
@@ -376,19 +379,24 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT
             new_knowns[i] = -calcQVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
     #now solve for the new values
     #get temp jac of just values oops
-
+    print("new knowns")
+    for i in range(knownnum):
+        print(new_knowns[i])
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
         for j in range(knownnum):
             temp_jac[i][j] = jacobian[i][j].val
-    new = np.linalg.solve(temp_jac, new_knowns)
+    corrections = np.linalg.solve(temp_jac, new_knowns)
+    print("corrections")
+    for i in range(knownnum):
+        print(corrections[i])
     for j in range(knownnum):
-        print("first element new vector: ", new[j])
-        xmat[j].val += new[j]
+        xmat[j].val += corrections[j] #this is wrong
         temp_num = int(xmat[j].name[1])
+        temp_val = xmat[j].val
         if xmat[j].name[0] == "T":
-            t_list[temp_num-1] = xmat[j].val
+            t_list[(temp_num-1)] = temp_val
         elif xmat[j].name[0] == "V":
-            v_list[temp_num-1] = xmat[j].val
+            v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
