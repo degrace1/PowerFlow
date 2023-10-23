@@ -119,12 +119,12 @@ Returns:
 """
 def printMat(num, xmat):
     for i in range(int(num)):
-        print(xmat[i].name + ", " + str(xmat[i].val))
+        print(xmat[i].name + ": " + str(xmat[i].val))
 
 
 """
-Function: print matrix
-This will print a matrix (probably Ybus) (rows & columns amount = busnum)
+Function: print multi matrix
+This will print a matrix (probably Ybus, jacobian)
 Parameters:
     num - number of elem for rows and columns in matrix
     xmat - matrix
@@ -132,12 +132,18 @@ Returns:
     nothing, just print
 """
 def printMultiMat(num, mat, jac):
+    str_print = ['' for i in range(int(num))]
     for i in range(int(num)):
         for j in range(int(num)):
             if jac == False:
-                print(mat[i][j].name + ", " + str(mat[i][j].val))
+                #print(mat[i][j].name + ", " + str(mat[i][j].val))
+                str_print[i] += mat[i][j].name + ": " + str(mat[i][j].val)
             else:
-                print(mat[i][j].name + ", " + str(mat[i][j].val), ", ", str(mat[i][j].type))
+                #print(mat[i][j].name + ", " + str(mat[i][j].val) + ", " + str(mat[i][j].type))
+                str_print[i] += mat[i][j].name + ": " + str(mat[i][j].val)
+            if j != int(num):
+                str_print[i] += ', '
+        print(str_print[i])
 
 
 """
@@ -449,7 +455,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
     calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
     new_knowns = [0 for i in range(knownnum)]
-
+    net_injections = knowns
     for i in range(knownnum):
         new_knowns[i] = knowns[i].val
     for i in range(knownnum):
@@ -457,29 +463,25 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
         num = int(knowns[i].name[1])-1
         type = knowns[i].name[0]
         if type == 'P':
-            #FIXME: P may be negative. will we write this in the excel? or add it in the code?
-            # subtractions may be wrong
+            #Note: change generating/not +/- for P and Q IN EXCEL
             new_p = calcPVal(num, ybus, busnum, t_list, v_list)
-            new_knowns[i] = -new_p - new_knowns[i]
+            net_injections[i].val = new_p
+            new_knowns[i] = new_knowns[i] - new_p
         else:
-            #FIXME: same as P
-            # subtractions may be wrong
-            new_knowns[i] = -calcQVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
-    #now solve for the new values
-    #get temp jac of just values oops
-    # print("new knowns")
-    # for i in range(knownnum):
-    #     print(new_knowns[i])
+            #Note: change generating/not +/- for P and Q IN EXCEL
+            new_q = calcQVal(num, ybus, busnum, t_list, v_list)
+            net_injections[i].val = new_q
+            new_knowns[i] = new_knowns[i] - new_q
+    print("Net Injections: ")
+    printMat(knownnum, net_injections)
+
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
         for j in range(knownnum):
             temp_jac[i][j] = jacobian[i][j].val
     corrections = np.linalg.solve(temp_jac, new_knowns)
-    # print("corrections")
-    # for i in range(knownnum):
-    #     print(corrections[i])
     for j in range(knownnum):
-        xmat[j].val += corrections[j] #this is wrong
+        xmat[j].val += corrections[j] #this is wrong?
         temp_num = int(xmat[j].name[1])
         temp_val = xmat[j].val
         if xmat[j].name[0] == "T":
@@ -488,7 +490,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
-    return corrections
+    return corrections,
 
 def newtonRhapson(conv_crit):
     stuff = loadFile('ex_nr.xlsx')
@@ -510,34 +512,23 @@ def newtonRhapson(conv_crit):
     knowns = [VarMat() for i in range(int(knownnum))]
     xmat = [VarMat() for j in range(int(knownnum))]
 
-    # printMat(knownnum, xmat)
+
     getInitMats(xmat, knowns, p_list, q_list, busnum)
     setInitGuess(knownnum, xmat)
-    # print("initial empty xmat")
-    # printMat(knownnum, xmat)
+
 
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
     zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
     getZYbus(busnum, yBus, zBus, line_z)
 
-    #yBusCopy = yBus
+
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
     piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
     yBusCutsemCalc(busnum, y_mini, lines, yBus)
-    # print("ybus with new algorithm")
-    # printMultiMat(busnum, yBusCopy, False)
-    # print("y mini")
-    # print(y_mini)
-    #
-    # print(zBus)
 
-    #calcYbus(busnum, yBus, zBus)
-    #printMultiMat(busnum, yBus, False)
-    #print("first element of y bus real part is: ", yBus[0][0].val.real)
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
-    #print("empty jacobian: ")
-    #printMultiMat(knownnum, jacobian, True)
+
     # iterate #1
     iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum)
     print("filled jacobian: ")
