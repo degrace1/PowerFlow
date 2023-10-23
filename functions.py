@@ -455,7 +455,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
     calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
     new_knowns = [0 for i in range(knownnum)]
-    net_injections = knowns
+    net_injections = [0 for i in range(knownnum)]
     for i in range(knownnum):
         new_knowns[i] = knowns[i].val
     for i in range(knownnum):
@@ -465,15 +465,15 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
         if type == 'P':
             #Note: change generating/not +/- for P and Q IN EXCEL
             new_p = calcPVal(num, ybus, busnum, t_list, v_list)
-            net_injections[i].val = new_p
+            net_injections[i] = new_p ###this is somehow changing knowns too
             new_knowns[i] = new_knowns[i] - new_p
         else:
             #Note: change generating/not +/- for P and Q IN EXCEL
             new_q = calcQVal(num, ybus, busnum, t_list, v_list)
-            net_injections[i].val = new_q
+            net_injections[i] = new_q
             new_knowns[i] = new_knowns[i] - new_q
     print("Net Injections: ")
-    printMat(knownnum, net_injections)
+    print(net_injections)
 
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
@@ -490,7 +490,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
-    return corrections,
+    return corrections, new_knowns
 
 def newtonRhapson(conv_crit):
     stuff = loadFile('ex_nr.xlsx')
@@ -525,19 +525,29 @@ def newtonRhapson(conv_crit):
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
     piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
     yBusCutsemCalc(busnum, y_mini, lines, yBus)
-
+    #printMultiMat(busnum, yBus, False)
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
-
-    # iterate #1
-    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum)
-    print("filled jacobian: ")
-    printMultiMat(knownnum, jacobian, True)
-    print("New voltage angles and magnitudes")
-    printMat(knownnum, xmat)
-    # iterate #2
-    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum)
-    print("filled jacobian: ")
-    printMultiMat(knownnum, jacobian, True)
-    print("New voltage angles and magnitudes")
-    printMat(knownnum, xmat)
+    convergence = False
+    itno = 0
+    while not convergence:
+        itno += 1
+        print("Iteration #" + str(itno))
+        temp_knowns = knowns
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum)
+        corrections = outputs[0]
+        rhs = outputs[1]
+        print("Jacobian: ")
+        printMultiMat(knownnum, jacobian, True)
+        print("Corrections Vector: ")
+        print(corrections)
+        print("RHS Vector: ")
+        print(rhs)
+        print("New voltage angles and magnitudes")
+        printMat(knownnum, xmat)
+        count = 0
+        for i in range(corrections.size):
+            if abs(corrections[i]) > conv_crit:
+                cur = abs(corrections[i])
+                count += 1
+        convergence = count == 0
