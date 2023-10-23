@@ -2,8 +2,57 @@
 from classes import *
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import cmath
+
+
+'''
+Function: load file
+load initial excel file to get needed lists/info for the rest of the code
+'''
+def loadFile(filename):
+    #read excel file
+    filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/' + filename
+    initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
+    #extract number of buses
+    busnum = len(initial.index)
+    #extract v and theta values and sub in 0 or 1 for first guess
+    v_list = initial.loc[:, 'V'].to_numpy()
+    v_list[np.isnan(v_list)] = 1
+    v_list = np.array(v_list)
+    v_list = v_list.astype('float64')
+    t_list = initial.loc[:, 'T'].to_numpy()
+    t_list[np.isnan(t_list)] = 0
+    t_list = np.array(t_list)
+    t_list = t_list.astype('float64')
+    #extract p and q list
+    #adds NANs to spots where there is no initial
+    p_list = initial.loc[:, 'P'].to_numpy()
+    q_list = initial.loc[:, 'Q'].to_numpy()
+    # print("Initial things we know: ")
+    # print("Number of buses: ", busnum)
+    # print("List of Vs: ", v_list)
+    # print("List of Ts: ", t_list)
+    # print("List of Ps: ", p_list)
+    # print("List of Qs: ", q_list)
+
+    numP = initial.loc[:, 'P'].count()
+    numQ = initial.loc[:, 'Q'].count()
+    numT = numP
+    numV = numQ
+    knownnum = numP + numQ
+    line_z = pd.read_excel('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr.xlsx', sheet_name='line_imp')
+    lines = line_z.loc[:, 'line'].to_numpy()
+    r_list = line_z.loc[:, 'R'].to_numpy()
+    r_list = r_list.astype('float64')
+    x_list = line_z.loc[:, 'X'].to_numpy()
+    x_list = x_list.astype('float64')
+    r_shunt = line_z.loc[:, 'shunt_r'].to_numpy()
+    r_shunt = r_shunt.astype('float64')
+    x_shunt = line_z.loc[:, 'shunt_x'].to_numpy()
+    x_shunt = x_shunt.astype('float64')
+    # print("Number of Ps: ", numP)
+    # print("Number of Qs: ", numQ)
+    # print("Number of knowns: ", knownnum)
+    return v_list, t_list, p_list, q_list, lines, r_list, x_list, r_shunt, x_shunt, knownnum, busnum, line_z, numT, numV
 
 """
 Function: get initial matrices
@@ -31,7 +80,6 @@ def getInitMats(xmat, knowns, p_list, q_list, busnum):
             knowns[sumcount].name = "P" + str(i + 1)
             knowns[sumcount].val = p_list[i]
             sumcount += 1
-            print(sumcount)
     newcount = 0
     for j in range(busnum):
         # check if there is a value for initial Q
@@ -105,6 +153,7 @@ Returns:
     yBus - filled with names of the ybus for later use
     zBus - filled with values from user (complex #s)
 """
+#fixme: change z_imp to the individual lists
 def getZYbus(busnum, yBus, zBus, z_imp):
     countz = 0
     for i in range(int(busnum)):
@@ -152,17 +201,58 @@ def calcYbus(busnum, yBus, zBus):
             else:  # if its not a diagnol element
                 # check that its not zero to avoid inf zero
                 if zBus[i][j] != complex(0, 0) and zBus[i][j] != 0:
-                    #FIXME: should this be negative or not?
                     yBus[i][j].val = -1 / zBus[i][j]
                 else:
                     yBus[i][j].val = complex(0, 0)
+
+'''
+Function: pi line model
+for creating a 2x2 admittance matrix for a one line system. Part 1 of the Cutsem method.
+'''
+def piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines):
+    line_num = lines.size
+    #shape: 0 is 11, 1 is 12, 2 is 21, and 3 is 22
+    for i in range(line_num):
+        if x_shunt[i] != '' and x_shunt[i] != 0:
+            y_mini[i][0] = 1/complex(r_list[i],x_list[i])+1/complex(0,x_shunt[i])
+        else:
+            y_mini[i][0] = 1 / complex(r_list[i], x_list[i])
+        y_mini[i][1] = -1/complex(r_list[i],x_list[i])
+        y_mini[i][2] = y_mini[i][0]
+        y_mini[i][3] = y_mini[i][1]
+'''
+Function: Ybus calculations with cutsem algorithm/pi line model
+'''
+def yBusCutsemCalc(busnum, y_mini, lines, yBus):
+    for i in range(busnum):
+        for j in range(busnum):
+            if i == j: #diagonal element
+                sum = 0
+                for k in range(lines.size):
+                    str_temp = str(lines[k])
+                    if str_temp[0] == str(i+1): #if in the list of lines, this specific line starts with i 'ik'
+                        sum += y_mini[k][0]
+                    elif str_temp[1] == str(i+1): #or if its line 'ki'
+                        sum += y_mini[k][0]
+                yBus[i][j].val = sum
+            else: #off diagonal element
+                #first check if this line exists to see if the mini Y exists
+                str_ind1 = int(str(i+1) + str(j+1))
+                str_ind2 = int(str(j+1) + str(i+1))
+                mini_index1 = np.where(lines == str_ind1)
+                mini_index2 = np.where(lines == str_ind2)
+                if str_ind1 in lines:
+                    yBus[i][j].val = y_mini[mini_index1[0][0]][1]
+                elif str_ind2 in lines:
+                    yBus[i][j].val = y_mini[mini_index2[0][0]][1]
+                else:
+                    yBus[i][j].val = complex(0,0)
 
 
 '''
 Function: calculate uij
 '''
 def uij(gij, bij, thetai, thetaj):
-    #fixme: negatives?
     return (-gij * np.sin(thetai - thetaj) - (-bij * np.cos(thetai - thetaj)))
 
 
@@ -170,14 +260,12 @@ def uij(gij, bij, thetai, thetaj):
 Function: calculate tij
 '''
 def tij(gij, bij, thetai, thetaj):
-    #fixme: negatives?
     return (-gij * np.cos(thetai - thetaj) + (-bij * np.sin(thetai - thetaj)))
 
 
 '''
 Function: calculate P value
 '''
-#FIXME: signs messed up in tij uij, gij, bij
 def calcPVal(num, yBus, busnum, T, V):
     num = int(num)
     p = (V[num]**2) * yBus[num][num].val.real
@@ -356,7 +444,7 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
 Function: iterate
 should update P, Q, known matrix, unknown matrix, and jacobian
 '''
-def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT, numV):
+def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
     #first calculate the jacobian matrix
     calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
@@ -379,17 +467,17 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT
             new_knowns[i] = -calcQVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
     #now solve for the new values
     #get temp jac of just values oops
-    print("new knowns")
-    for i in range(knownnum):
-        print(new_knowns[i])
+    # print("new knowns")
+    # for i in range(knownnum):
+    #     print(new_knowns[i])
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
         for j in range(knownnum):
             temp_jac[i][j] = jacobian[i][j].val
     corrections = np.linalg.solve(temp_jac, new_knowns)
-    print("corrections")
-    for i in range(knownnum):
-        print(corrections[i])
+    # print("corrections")
+    # for i in range(knownnum):
+    #     print(corrections[i])
     for j in range(knownnum):
         xmat[j].val += corrections[j] #this is wrong
         temp_num = int(xmat[j].name[1])
@@ -400,3 +488,65 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, numT
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
+    return corrections
+
+def newtonRhapson(conv_crit):
+    stuff = loadFile('ex_nr.xlsx')
+    v_list = stuff[0]
+    t_list = stuff[1]
+    p_list = stuff[2]
+    q_list = stuff[3]
+    lines = stuff[4]
+    r_list = stuff[5]
+    x_list = stuff[6]
+    r_shunt = stuff[7]
+    x_shunt = stuff[8]
+    knownnum = stuff[9]
+    busnum = stuff[10]
+    line_z = stuff[11]
+    numT = stuff[12]
+    numV = stuff[13]
+
+    knowns = [VarMat() for i in range(int(knownnum))]
+    xmat = [VarMat() for j in range(int(knownnum))]
+
+    # printMat(knownnum, xmat)
+    getInitMats(xmat, knowns, p_list, q_list, busnum)
+    setInitGuess(knownnum, xmat)
+    # print("initial empty xmat")
+    # printMat(knownnum, xmat)
+
+    yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
+    zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
+    getZYbus(busnum, yBus, zBus, line_z)
+
+    #yBusCopy = yBus
+    y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
+    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
+    yBusCutsemCalc(busnum, y_mini, lines, yBus)
+    # print("ybus with new algorithm")
+    # printMultiMat(busnum, yBusCopy, False)
+    # print("y mini")
+    # print(y_mini)
+    #
+    # print(zBus)
+
+    #calcYbus(busnum, yBus, zBus)
+    #printMultiMat(busnum, yBus, False)
+    #print("first element of y bus real part is: ", yBus[0][0].val.real)
+    jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
+    nameJacElem(knownnum, knowns, xmat, jacobian)
+    #print("empty jacobian: ")
+    #printMultiMat(knownnum, jacobian, True)
+    # iterate #1
+    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum)
+    print("filled jacobian: ")
+    printMultiMat(knownnum, jacobian, True)
+    print("New voltage angles and magnitudes")
+    printMat(knownnum, xmat)
+    # iterate #2
+    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum)
+    print("filled jacobian: ")
+    printMultiMat(knownnum, jacobian, True)
+    print("New voltage angles and magnitudes")
+    printMat(knownnum, xmat)
