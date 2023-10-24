@@ -800,7 +800,7 @@ def FastDecoupled(conv_crit):
         print("Iteration #" + str(itno))
         temp_knowns = knowns
         # option of iterate with "iterate_FDLF" or "iterate_FDLF_endit"
-        outputs = iterate_FDLF(knownnum, yBus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, temp_knowns,
+        outputs = iterate_FDLF_endit(knownnum, yBus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, temp_knowns,
                                busnum)
         corrections = outputs[0]
         rhs = outputs[1]
@@ -808,6 +808,13 @@ def FastDecoupled(conv_crit):
         printMat(knownnum, rhs)
         print("New voltage angles and magnitudes")
         printMat(knownnum, xmat)
+
+        #start of Q constrains at PV buses
+        pv_Qs = [VarMat() for i in range(len(pvbus))]
+        for i in range(len(pvbus)):
+            pv_Qs[i].name = 'Q' + str(pvbus[i]+1)
+            pv_Qs[i].val = calcQVal(pvbus[i], yBus, busnum, t_list, v_list)
+
         count = 0
         for i in range(knownnum):
             if abs(corrections[i].val) > conv_crit:
@@ -821,3 +828,7 @@ def FastDecoupled(conv_crit):
             p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
         if np.isnan(q_list[i]):
             q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+    print("Ps")
+    print(p_list)
+    print("Qs")
+    print(q_list)
