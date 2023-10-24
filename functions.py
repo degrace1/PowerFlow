@@ -10,7 +10,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = 'C:/Users/Ximena/Desktop/project tet4205/PowerFlow/' + filename
+    filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -166,15 +166,15 @@ def getZYbus(busnum, yBus, zBus, z_imp):
         for j in range(int(busnum)):
             yBus[i][j].name = "Y" + str(i + 1) + str(j + 1)
             # ask for "zbus" values
-            if j != i:
-                if zBus[j][i] != complex(0, 0) or zBus[j][i] != 0:
-                    zBus[i][j] = zBus[j][i]
-                else:
-                    if z_imp.loc[countz, 'line'] == int(str(i + 1) + str(j + 1)):
-                        a = z_imp.loc[countz, 'R']
-                        b = z_imp.loc[countz, 'X']
-                        countz += 1
-                        zBus[i][j] = complex(a, b)
+            # if j != i:
+            #     if zBus[j][i] != complex(0, 0) or zBus[j][i] != 0:
+            #         zBus[i][j] = zBus[j][i]
+            #     else:
+            #         if z_imp.loc[countz, 'line'] == int(str(i + 1) + str(j + 1)):
+            #             a = z_imp.loc[countz, 'R']
+            #             b = z_imp.loc[countz, 'X']
+            #             countz += 1
+            #             zBus[i][j] = complex(a, b)
 
 
 """
@@ -532,16 +532,16 @@ def newtonRhapson(conv_crit):
     itno = 0
     while not convergence:
         itno += 1
-        print("Iteration #" + str(itno))
+        print("\n\nIteration #" + str(itno))
         temp_knowns = knowns
         outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum)
         corrections = outputs[0]
         rhs = outputs[1]
         print("Jacobian: ")
         printMultiMat(knownnum, jacobian, True)
-        print("Corrections Vector: ")
+        print("Corrections Vector (dV, dT): ")
         print(corrections)
-        print("RHS Vector: ")
+        print("RHS Vector (dP, dQ): ")
         print(rhs)
         print("New voltage angles and magnitudes")
         printMat(knownnum, xmat)
@@ -551,7 +551,46 @@ def newtonRhapson(conv_crit):
                 cur = abs(corrections[i])
                 count += 1
         convergence = count == 0
+def DCPF(yBus,busnum, knowns):
+    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr.xlsx'
+    #Remove row and column corresponding to slack bus
+    ##check excel for bus_type and get index=slack_bus
+    initial= pd.read_excel(filename, sheet_name='initial')
+    bus_type=initial.loc[:,'bus_type']
+    slack_bus=np.where(bus_type=='slack')[0][0]
+    y_bus_without_slack = np.delete(np.delete(yBus, slack_bus, axis=0), slack_bus, axis=1)
 
+    #Neglect the real part of the Ybus elements
+    for i in range(y_bus_without_slack.shape[0]):
+        for j in range(y_bus_without_slack.shape[1]):
+            complex_element = y_bus_without_slack[i, j]
+            real_part = np.real(complex_element)
+            imaginary_part = np.imag(complex_element)
+            # Set the real part to zero
+            y_bus_without_slack[i, j] = complex(imaginary_part)
+
+    #Delete the symbol j from the imaginary numbers left
+    y_bus_without_slack_magnitude=np.abs(y_bus_without_slack)
+
+    #Multiply the matrix by -1
+    yBusDC=-1*y_bus_without_slack_magnitude
+
+    #DC Load Flow
+    knowns_without_slack = np.delete(knowns, slack_bus, axis=0)#delete slack bus
+    inv_yBusDC=np.linalg.inv(yBusDC)
+    xmat = np.matmul(inv_yBusDC, knowns_without_slack)
+    new_row = np.zeros((1, xmat.shape[1]))
+    xmat = np.insert(xmat, slack_bus, new_row, axis=0)
+
+    #calculate P in slack bus
+    slack_bus = int(slack_bus)
+    sum = 0
+    PDC_slack = 0
+    for j in range(int(busnum)):
+        if j != slack_bus:
+            PDC_slack += (yBus[slack_bus][j])*(xmat[slack_bus]- xmat[j])
+
+    return slack_bus, xmat, PDC_slack
 
 
 
