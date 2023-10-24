@@ -1,5 +1,5 @@
 from functions import *
-
+from DCPF import *
 '''
 Main file
 Newton Rhapson:
