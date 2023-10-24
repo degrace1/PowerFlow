@@ -10,7 +10,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/' + filename
+    filename = 'C:/Users/Ximena/Desktop/project tet4205/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -613,6 +613,7 @@ def loadbustype(filename):
 
 '''
 Function: iterate_FDLF
+the angles are updated halfway to then obtain Q mismatches and update the Vs
 '''
 def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, knowns, busnum):
     new_knowns = [VarMat() for i in range(knownnum)]
@@ -672,6 +673,57 @@ def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list,
 
 
 '''
+Function: iterate_FDLF_endit
+updates of angles and voltages are done at the end of the iteration, after getting P and Q mismatches
+'''
+def iterate_FDLF_endit(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, knowns, busnum):
+    new_knowns = [VarMat() for i in range(knownnum)]
+    net_injections = [VarMat() for i in range(knownnum)]
+    for i in range(knownnum):
+        new_knowns[i].name = knowns[i].name
+        new_knowns[i].val = knowns[i].val
+    # active and reactive power mismatches (not updating values of T)
+    dP_V = [0 for i in range(busnum-len(slackbus))]
+    dQ_V = [0 for i in range(busnum - len(slackbus) - len(pvbus))]
+    corrections = [VarMat() for i in range(knownnum)]
+    cueP = 0
+    cueQ = 0
+    for i in range(knownnum):
+        num = int(knowns[i].name[1])-1
+        type = knowns[i].name[0]
+        net_injections[i].name = knowns[i].name
+        if type == 'P':
+            net_injections[i].val = calcPVal(num, ybus, busnum, t_list, v_list)
+            new_knowns[i].val = new_knowns[i].val - net_injections[i].val
+            dP_V[cueP] = new_knowns[i].val / v_list[num]
+            cueP =+ 1
+            corrections[i].name = 'T' + knowns[i].name[1]
+        else:
+            net_injections[i].val = calcQVal(num, ybus, busnum, t_list, v_list)
+            new_knowns[i].val = new_knowns[i].val - net_injections[i].val
+            dQ_V[cueQ] = new_knowns[i].val / v_list[num]
+            cueQ = + 1
+            corrections[i].name = 'V' + knowns[i].name[1]
+    # solve for dT and dV
+    dT = -np.dot(bp_inv, np.transpose(dP_V))
+    dV = -np.dot(bpp_inv, np.transpose(dQ_V))
+    # update the angles and voltages
+    cueP = 0
+    cueQ = 0
+    for j in range(knownnum):
+        if xmat[j].name[0] == "T":
+            corrections[j].val = dT[cueP]
+            xmat[j].val += corrections[j].val
+            t_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
+            cueP = + 1
+        else:
+            corrections[j].val = dV[cueQ]
+            xmat[j].val += corrections[j].val
+            v_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
+            cueQ = + 1
+    return corrections, new_knowns
+
+'''
 Function: FastDecoupled
 algorithm with the Fast Decoupled method
 '''
@@ -712,8 +764,8 @@ def FastDecoupled(conv_crit):
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
 
-    # Obtain the B', [B']^{-1}, and B''
-    bp = np.empty([busnum-len(slackbus),busnum-len(slackbus)])
+    # Obtain the inverses of B' and B''
+    bp = np.empty([busnum-len(slackbus), busnum-len(slackbus)])
     bp[:] = np.nan
     bpp = np.empty([busnum - len(slackbus) - len(pvbus), busnum-len(slackbus)-len(pvbus)])
     bpp[:] = np.nan
@@ -725,14 +777,14 @@ def FastDecoupled(conv_crit):
         for j in range(busnum):
             if i not in slackbus and j not in slackbus:
                 bp[ic, jc] = yBus[i][j].val.imag
-                if jc <= len(slackbus)-1:
+                if jc < busnum - len(slackbus) - 1:
                     jc += 1
                 else:
                     jc = 0
                     ic += 1
                 if i not in pvbus and j not in pvbus:
                     bpp[icc, jcc] = yBus[i][j].val.imag
-                    if jcc <= len(pvbus)-1:
+                    if jcc < busnum - len(slackbus) - len(pvbus) - 1:
                         jcc += 1
                     else:
                         jcc = 0
@@ -747,6 +799,7 @@ def FastDecoupled(conv_crit):
         itno += 1
         print("Iteration #" + str(itno))
         temp_knowns = knowns
+        # option of iterate with "iterate_FDLF" or "iterate_FDLF_endit"
         outputs = iterate_FDLF(knownnum, yBus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, temp_knowns,
                                busnum)
         corrections = outputs[0]
