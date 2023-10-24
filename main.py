@@ -10,6 +10,7 @@ Newton Rhapson:
 def main():
     conv_crit = 0.000001
     newtonRhapson(conv_crit)
+    FastDecoupled(conv_crit)
 
 
 
