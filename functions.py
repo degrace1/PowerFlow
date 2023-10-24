@@ -165,16 +165,17 @@ def getZYbus(busnum, yBus, zBus, z_imp):
     for i in range(int(busnum)):
         for j in range(int(busnum)):
             yBus[i][j].name = "Y" + str(i + 1) + str(j + 1)
+            # not needed anymore
             # ask for "zbus" values
-            if j != i:
-                if zBus[j][i] != complex(0, 0) or zBus[j][i] != 0:
-                    zBus[i][j] = zBus[j][i]
-                else:
-                    if z_imp.loc[countz, 'line'] == int(str(i + 1) + str(j + 1)):
-                        a = z_imp.loc[countz, 'R']
-                        b = z_imp.loc[countz, 'X']
-                        countz += 1
-                        zBus[i][j] = complex(a, b)
+            # if j != i:
+            #     if zBus[j][i] != complex(0, 0) or zBus[j][i] != 0:
+            #         zBus[i][j] = zBus[j][i]
+            #     else:
+            #         if z_imp.loc[countz, 'line'] == int(str(i + 1) + str(j + 1)):
+            #             a = z_imp.loc[countz, 'R']
+            #             b = z_imp.loc[countz, 'X']
+            #             countz += 1
+            #             zBus[i][j] = complex(a, b)
 
 
 """
@@ -532,16 +533,16 @@ def newtonRhapson(conv_crit):
     itno = 0
     while not convergence:
         itno += 1
-        print("Iteration #" + str(itno))
+        print("\n\nIteration #" + str(itno))
         temp_knowns = knowns
         outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum)
         corrections = outputs[0]
         rhs = outputs[1]
         print("Jacobian: ")
         printMultiMat(knownnum, jacobian, True)
-        print("Corrections Vector: ")
+        print("Corrections Vector (dV, dT): ")
         print(corrections)
-        print("RHS Vector: ")
+        print("RHS Vector (dP, dQ): ")
         print(rhs)
         print("New voltage angles and magnitudes")
         printMat(knownnum, xmat)
