@@ -8,7 +8,7 @@ Newton Rhapson:
 '''
 
 def main():
-    conv_crit = 0.0000000001
+    conv_crit = 0.000001
     newtonRhapson(conv_crit)
 
 

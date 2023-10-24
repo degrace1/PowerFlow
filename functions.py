@@ -119,12 +119,12 @@ Returns:
 """
 def printMat(num, xmat):
     for i in range(int(num)):
-        print(xmat[i].name + ", " + str(xmat[i].val))
+        print(xmat[i].name + ": " + str(xmat[i].val))
 
 
 """
-Function: print matrix
-This will print a matrix (probably Ybus) (rows & columns amount = busnum)
+Function: print multi matrix
+This will print a matrix (probably Ybus, jacobian)
 Parameters:
     num - number of elem for rows and columns in matrix
     xmat - matrix
@@ -132,12 +132,18 @@ Returns:
     nothing, just print
 """
 def printMultiMat(num, mat, jac):
+    str_print = ['' for i in range(int(num))]
     for i in range(int(num)):
         for j in range(int(num)):
             if jac == False:
-                print(mat[i][j].name + ", " + str(mat[i][j].val))
+                #print(mat[i][j].name + ", " + str(mat[i][j].val))
+                str_print[i] += mat[i][j].name + ": " + str(mat[i][j].val)
             else:
-                print(mat[i][j].name + ", " + str(mat[i][j].val), ", ", str(mat[i][j].type))
+                #print(mat[i][j].name + ", " + str(mat[i][j].val) + ", " + str(mat[i][j].type))
+                str_print[i] += mat[i][j].name + ": " + str(mat[i][j].val)
+            if j != int(num):
+                str_print[i] += ', '
+        print(str_print[i])
 
 
 """
@@ -449,7 +455,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
     calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
     new_knowns = [0 for i in range(knownnum)]
-
+    net_injections = [0 for i in range(knownnum)]
     for i in range(knownnum):
         new_knowns[i] = knowns[i].val
     for i in range(knownnum):
@@ -457,29 +463,25 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
         num = int(knowns[i].name[1])-1
         type = knowns[i].name[0]
         if type == 'P':
-            #FIXME: P may be negative. will we write this in the excel? or add it in the code?
-            # subtractions may be wrong
+            #Note: change generating/not +/- for P and Q IN EXCEL
             new_p = calcPVal(num, ybus, busnum, t_list, v_list)
-            new_knowns[i] = -new_p - new_knowns[i]
+            net_injections[i] = new_p ###this is somehow changing knowns too
+            new_knowns[i] = new_knowns[i] - new_p
         else:
-            #FIXME: same as P
-            # subtractions may be wrong
-            new_knowns[i] = -calcQVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
-    #now solve for the new values
-    #get temp jac of just values oops
-    # print("new knowns")
-    # for i in range(knownnum):
-    #     print(new_knowns[i])
+            #Note: change generating/not +/- for P and Q IN EXCEL
+            new_q = calcQVal(num, ybus, busnum, t_list, v_list)
+            net_injections[i] = new_q
+            new_knowns[i] = new_knowns[i] - new_q
+    print("Net Injections: ")
+    print(net_injections)
+
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
         for j in range(knownnum):
             temp_jac[i][j] = jacobian[i][j].val
     corrections = np.linalg.solve(temp_jac, new_knowns)
-    # print("corrections")
-    # for i in range(knownnum):
-    #     print(corrections[i])
     for j in range(knownnum):
-        xmat[j].val += corrections[j] #this is wrong
+        xmat[j].val += corrections[j] #this is wrong?
         temp_num = int(xmat[j].name[1])
         temp_val = xmat[j].val
         if xmat[j].name[0] == "T":
@@ -488,7 +490,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
-    return corrections
+    return corrections, new_knowns
 
 def newtonRhapson(conv_crit):
     stuff = loadFile('ex_nr.xlsx')
@@ -510,85 +512,42 @@ def newtonRhapson(conv_crit):
     knowns = [VarMat() for i in range(int(knownnum))]
     xmat = [VarMat() for j in range(int(knownnum))]
 
-    # printMat(knownnum, xmat)
+
     getInitMats(xmat, knowns, p_list, q_list, busnum)
     setInitGuess(knownnum, xmat)
-    # print("initial empty xmat")
-    # printMat(knownnum, xmat)
+
 
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
     zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
     getZYbus(busnum, yBus, zBus, line_z)
 
-    #yBusCopy = yBus
+
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
     piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
     yBusCutsemCalc(busnum, y_mini, lines, yBus)
-    # print("ybus with new algorithm")
-    # printMultiMat(busnum, yBusCopy, False)
-    # print("y mini")
-    # print(y_mini)
-    #
-    # print(zBus)
-
-    #calcYbus(busnum, yBus, zBus)
     #printMultiMat(busnum, yBus, False)
-    #print("first element of y bus real part is: ", yBus[0][0].val.real)
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
-    #print("empty jacobian: ")
-    #printMultiMat(knownnum, jacobian, True)
-    # iterate #1
-    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum)
-    print("filled jacobian: ")
-    printMultiMat(knownnum, jacobian, True)
-    print("New voltage angles and magnitudes")
-    printMat(knownnum, xmat)
-    # iterate #2
-    iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum)
-    print("filled jacobian: ")
-    printMultiMat(knownnum, jacobian, True)
-    print("New voltage angles and magnitudes")
-    printMat(knownnum, xmat)
-
-def DCPF(yBus,busnum):
-    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr.xlsx'
-    #Remove row and column corresponding to slack bus
-    ##check excel for bus_type and get index=slack_bus
-    initial= pd.read_excel(filename, sheet_name='initial')
-    bus_type=initial.loc[:,'bus_type']
-    slack_bus=np.where(bus_type=='slack')[0][0]
-    y_bus_without_slack = np.delete(np.delete(yBus, slack_bus, axis=0), slack_bus, axis=1)
-
-    #Neglect the real part of the Ybus elements
-    for i in range(y_bus_without_slack.shape[0]):
-        for j in range(y_bus_without_slack.shape[1]):
-            complex_element = y_bus_without_slack[i, j]
-            real_part = np.real(complex_element)
-            imaginary_part = np.imag(complex_element)
-            # Set the real part to zero
-            y_bus_without_slack[i, j] = complex(imaginary_part)
-
-    #Delete the symbol j from the imaginary numbers left
-    y_bus_without_slack_magnitude=np.abs(y_bus_without_slack)
-
-    #Multiply the matrix by -1
-    yBusDC=-1*y_bus_without_slack_magnitude
-
-    #DC Load Flow
-    knowns_without_slack = np.delete(knowns, slack_bus, axis=0)#delete slack bus
-    inv_yBusDC=np.linalg.inv(yBusDC)
-    xmat = np.matmul(inv_yBusDC, knowns_without_slack)
-    new_row = np.zeros((1, xmat.shape[1]))
-    xmat = np.insert(xmat, slack_bus, new_row, axis=0)
-
-    #calculate P in slack bus
-
-    slack_bus = int(slack_bus)
-    sum = 0
-    PDC_slack=0
-    for j in range(int(busnum)):
-        if j != slack_bus:
-            PDC_slack += (yBus[slack_bus][j])*(xmat[slack_bus]- xmat[j])
-
-    return slack_bus, xmat, PDC_slack
+    convergence = False
+    itno = 0
+    while not convergence:
+        itno += 1
+        print("Iteration #" + str(itno))
+        temp_knowns = knowns
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum)
+        corrections = outputs[0]
+        rhs = outputs[1]
+        print("Jacobian: ")
+        printMultiMat(knownnum, jacobian, True)
+        print("Corrections Vector: ")
+        print(corrections)
+        print("RHS Vector: ")
+        print(rhs)
+        print("New voltage angles and magnitudes")
+        printMat(knownnum, xmat)
+        count = 0
+        for i in range(corrections.size):
+            if abs(corrections[i]) > conv_crit:
+                cur = abs(corrections[i])
+                count += 1
+        convergence = count == 0
