@@ -10,7 +10,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = 'C:/Users/Ximena/Desktop/project tet4205/PowerFlow/' + filename
+    filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -39,7 +39,7 @@ def loadFile(filename):
     numT = numP
     numV = numQ
     knownnum = numP + numQ
-    line_z = pd.read_excel('ex_nr.xlsx', sheet_name='line_imp')
+    line_z = pd.read_excel(filename, sheet_name='line_imp')
     lines = line_z.loc[:, 'line'].to_numpy()
     r_list = line_z.loc[:, 'R'].to_numpy()
     r_list = r_list.astype('float64')
@@ -165,7 +165,8 @@ def getZYbus(busnum, yBus, zBus, z_imp):
     for i in range(int(busnum)):
         for j in range(int(busnum)):
             yBus[i][j].name = "Y" + str(i + 1) + str(j + 1)
-            # ask for "zbus" values
+            #not needed anymore
+            #ask for "zbus" values
             # if j != i:
             #     if zBus[j][i] != complex(0, 0) or zBus[j][i] != 0:
             #         zBus[i][j] = zBus[j][i]
@@ -220,7 +221,7 @@ def piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines):
     #shape: 0 is 11, 1 is 12, 2 is 21, and 3 is 22
     for i in range(line_num):
         if x_shunt[i] != '' and x_shunt[i] != 0:
-            y_mini[i][0] = 1/complex(r_list[i],x_list[i])+1/complex(0,x_shunt[i])
+            y_mini[i][0] = 1/complex(r_list[i],x_list[i])+(complex(0,x_shunt[i])/2)
         else:
             y_mini[i][0] = 1 / complex(r_list[i], x_list[i])
         y_mini[i][1] = -1/complex(r_list[i],x_list[i])
@@ -232,23 +233,23 @@ Function: Ybus calculations with cutsem algorithm/pi line model
 def yBusCutsemCalc(busnum, y_mini, lines, yBus):
     for i in range(busnum):
         for j in range(busnum):
-            if i == j: #diagonal element
+            if i == j: #diagonal element should be sum of all Y11 minis that connect to said i value
                 sum = 0
-                for k in range(lines.size):
-                    str_temp = str(lines[k])
+                for k in range(lines.size): #loop through lines (k will also be the index of y_mini matrices)
+                    str_temp = str(lines[k]) #line number like '12' or '23'
                     if str_temp[0] == str(i+1): #if in the list of lines, this specific line starts with i 'ik'
-                        sum += y_mini[k][0]
+                        sum += y_mini[k][0] #add first element (Y11) of the pi-line y_mini
                     elif str_temp[1] == str(i+1): #or if its line 'ki'
-                        sum += y_mini[k][0]
+                        sum += y_mini[k][0] #add first element (Y11) of the pi-line y_mini
                 yBus[i][j].val = sum
-            else: #off diagonal element
+            else: #off diagonal element should be the off-diagonal element of y_mini from bus i to j
                 #first check if this line exists to see if the mini Y exists
                 str_ind1 = int(str(i+1) + str(j+1))
                 str_ind2 = int(str(j+1) + str(i+1))
                 mini_index1 = np.where(lines == str_ind1)
                 mini_index2 = np.where(lines == str_ind2)
                 if str_ind1 in lines:
-                    yBus[i][j].val = y_mini[mini_index1[0][0]][1]
+                    yBus[i][j].val = y_mini[mini_index1[0][0]][1] #get Y12 value of the sub bus
                 elif str_ind2 in lines:
                     yBus[i][j].val = y_mini[mini_index2[0][0]][1]
                 else:
@@ -473,7 +474,9 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
             net_injections[i] = new_q
             new_knowns[i] = new_knowns[i] - new_q
     print("Net Injections: ")
-    print(net_injections)
+    for i in range(knownnum):
+        print(knowns[i].name, ': ', net_injections[i])
+
 
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
@@ -481,7 +484,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
             temp_jac[i][j] = jacobian[i][j].val
     corrections = np.linalg.solve(temp_jac, new_knowns)
     for j in range(knownnum):
-        xmat[j].val += corrections[j] #this is wrong?
+        xmat[j].val += corrections[j]
         temp_num = int(xmat[j].name[1])
         temp_val = xmat[j].val
         if xmat[j].name[0] == "T":
@@ -530,7 +533,7 @@ def newtonRhapson(conv_crit):
     nameJacElem(knownnum, knowns, xmat, jacobian)
     convergence = False
     itno = 0
-    while not convergence:
+    while not (convergence or itno > 10):
         itno += 1
         print("\n\nIteration #" + str(itno))
         temp_knowns = knowns
@@ -551,6 +554,7 @@ def newtonRhapson(conv_crit):
                 cur = abs(corrections[i])
                 count += 1
         convergence = count == 0
+
 def DCPF(yBus,busnum, knowns):
     filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr.xlsx'
     #Remove row and column corresponding to slack bus

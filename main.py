@@ -1,5 +1,5 @@
 from functions import *
-from DCPF import *
+#from DCPF import *
 '''
 Main file
 Newton Rhapson:
@@ -9,7 +9,7 @@ Newton Rhapson:
 
 def main():
     conv_crit = 0.000001
-    #newtonRhapson(conv_crit)
+    newtonRhapson(conv_crit)
     FastDecoupled(conv_crit)
 
 
