@@ -825,3 +825,112 @@ def FastDecoupled(conv_crit):
             p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
         if np.isnan(q_list[i]):
             q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+
+
+
+
+
+'''
+Function: calculate jacobian elements and update matrix for DLF
+'''
+def calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum):
+    for i in range(knownnum):
+        for j in range(knownnum):
+            # Ps
+            # this i and j isnt from the loop. its from the value from P/Q and V/T
+            i_temp = int(jacobian[i][j].name[2])-1
+            j_temp = int(jacobian[i][j].name[5])-1
+            if jacobian[i][j].type == 'dpidti':
+                jacobian[i][j].val = dpidti(i_temp, v_list, ybus, t_list, busnum)
+            elif jacobian[i][j].type == 'dpidtj':
+                jacobian[i][j].val = dpidtj(i_temp, j_temp, v_list, ybus, t_list)
+            elif jacobian[i][j].type == 'dpidvi':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dpidvj':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dqidti':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dqidtj':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dqidvi':
+                jacobian[i][j].val = dqidvi(i_temp, v_list, ybus, t_list, busnum)
+            elif jacobian[i][j].type == 'dqidvj':
+                jacobian[i][j].val = dqidvj(i_temp, j_temp, v_list, ybus, t_list)
+            else:
+                print('error')
+
+'''
+Function: iterate
+should update P, Q, known matrix, unknown matrix, and jacobian for DLF
+'''
+def iterateDLF(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
+    #first calculate the jacobian matrix
+    calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum)
+    #make temp knowns matrix without the names
+    new_knowns = [0 for i in range(knownnum)]
+
+    for i in range(knownnum):
+        new_knowns[i] = knowns[i].val
+    for i in range(knownnum):
+        #for each known value, calculate the new value of P or Q and subtract them
+        num = int(knowns[i].name[1])-1
+        type = knowns[i].name[0]
+        if type == 'P':
+            #FIXME: P may be negative. will we write this in the excel? or add it in the code?
+            # subtractions may be wrong
+            new_p = calcPVal(num, ybus, busnum, t_list, v_list)
+            new_knowns[i] = -new_p - new_knowns[i]
+        else:
+            #FIXME: same as P
+            # subtractions may be wrong
+            new_knowns[i] = -calcQVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
+    #now solve for the new values
+    #get temp jac of just values oops
+    # print("new knowns")
+    # for i in range(knownnum):
+    #     print(new_knowns[i])
+    temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
+    for i in range(knownnum):
+        for j in range(knownnum):
+            temp_jac[i][j] = jacobian[i][j].val
+    corrections = np.linalg.solve(temp_jac, new_knowns)
+    # print("corrections")
+    # for i in range(knownnum):
+    #     print(corrections[i])
+    for j in range(knownnum):
+        xmat[j].val += corrections[j] #this is wrong
+        temp_num = int(xmat[j].name[1])
+        temp_val = xmat[j].val
+        if xmat[j].name[0] == "T":
+            t_list[(temp_num-1)] = temp_val
+        elif xmat[j].name[0] == "V":
+            v_list[(temp_num-1)] = temp_val
+        else:
+            print("error thrown in updating v and t lists")
+    return corrections
+
+def DecoupledLoadFlow(conv_crit):
+    stuff = open('ex_nr.xlsx','r')
+    convergence = False
+    itno = 0
+    while not convergence:
+        itno += 1
+        print("\n\nIteration #" + str(itno))
+        temp_knowns = knowns
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum)
+        corrections = outputs[0]
+        rhs = outputs[1]
+        print("Jacobian: ")
+        printMultiMat(knownnum, jacobian, True)
+        print("Corrections Vector (dV, dT): ")
+        print(corrections)
+        print("RHS Vector (dP, dQ): ")
+        print(rhs)
+        print("New voltage angles and magnitudes")
+        printMat(knownnum, xmat)
+        count = 0
+        for i in range(corrections.size):
+            if abs(corrections[i]) > conv_crit:
+                cur = abs(corrections[i])
+                count += 1
+        convergence = count == 0
