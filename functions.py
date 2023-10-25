@@ -34,6 +34,7 @@ def loadFile(filename):
     # print("List of Ps: ", p_list)
     # print("List of Qs: ", q_list)
 
+
     numP = initial.loc[:, 'P'].count()
     numQ = initial.loc[:, 'Q'].count()
     numT = numP
@@ -52,7 +53,11 @@ def loadFile(filename):
     # print("Number of Ps: ", numP)
     # print("Number of Qs: ", numQ)
     # print("Number of knowns: ", knownnum)
-    return v_list, t_list, p_list, q_list, lines, r_list, x_list, r_shunt, x_shunt, knownnum, busnum, line_z, numT, numV
+    t_x = line_z.loc[:, 't_x'].to_numpy()
+    t_x = t_x.astype('float64')
+    t_a = line_z.loc[:, 't_a'].to_numpy()
+    t_a = t_a.astype('float64')
+    return v_list, t_list, p_list, q_list, lines, r_list, x_list, r_shunt, x_shunt, knownnum, busnum, line_z, numT, numV, t_x, t_a
 
 """
 Function: get initial matrices
@@ -216,17 +221,26 @@ def calcYbus(busnum, yBus, zBus):
 Function: pi line model
 for creating a 2x2 admittance matrix for a one line system. Part 1 of the Cutsem method.
 '''
-def piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines):
+def piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a):
     line_num = lines.size
     #shape: 0 is 11, 1 is 12, 2 is 21, and 3 is 22
     for i in range(line_num):
-        if x_shunt[i] != '' and x_shunt[i] != 0:
-            y_mini[i][0] = 1/complex(r_list[i],x_list[i])+(complex(0,x_shunt[i])/2)
+        if r_list[i] != '':
+            if x_shunt[i] != '' and x_shunt[i] != 0:
+                y_mini[i][0] = 1/complex(r_list[i],x_list[i])+(complex(0,x_shunt[i])/2)
+            else:
+                y_mini[i][0] = 1 / complex(r_list[i], x_list[i])
+            y_mini[i][1] = -1/complex(r_list[i],x_list[i])
+            y_mini[i][2] = y_mini[i][1]
+            y_mini[i][3] = y_mini[i][0]
         else:
-            y_mini[i][0] = 1 / complex(r_list[i], x_list[i])
-        y_mini[i][1] = -1/complex(r_list[i],x_list[i])
-        y_mini[i][2] = y_mini[i][0]
-        y_mini[i][3] = y_mini[i][1]
+            y_mini[i][0] = 1/complex(0, t_x[i])/(t_a[i]**2)
+            y_mini[i][1] = -1/complex(0, t_x[i])/t_a[i]
+            y_mini[i][2] = y_mini[i][1]
+            y_mini[i][3] = 1/complex(0, t_x[i])
+
+
+
 '''
 Function: Ybus calculations with cutsem algorithm/pi line model
 '''
@@ -511,6 +525,8 @@ def newtonRhapson(conv_crit):
     line_z = stuff[11]
     numT = stuff[12]
     numV = stuff[13]
+    t_x = stuff[14]
+    t_a = stuff[15]
 
     knowns = [VarMat() for i in range(int(knownnum))]
     xmat = [VarMat() for j in range(int(knownnum))]
@@ -526,7 +542,7 @@ def newtonRhapson(conv_crit):
 
 
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
+    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
     yBusCutsemCalc(busnum, y_mini, lines, yBus)
     #printMultiMat(busnum, yBus, False)
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
