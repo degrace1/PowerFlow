@@ -10,7 +10,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/' + filename
+    filename = 'C:/Users/PC/git_repos/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -868,7 +868,7 @@ def iterateDLF(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
     calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
     new_knowns = [0 for i in range(knownnum)]
-
+    net_injections = [0 for i in range(knownnum)]
     for i in range(knownnum):
         new_knowns[i] = knowns[i].val
     for i in range(knownnum):
@@ -876,29 +876,27 @@ def iterateDLF(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
         num = int(knowns[i].name[1])-1
         type = knowns[i].name[0]
         if type == 'P':
-            #FIXME: P may be negative. will we write this in the excel? or add it in the code?
-            # subtractions may be wrong
+            #Note: change generating/not +/- for P and Q IN EXCEL
             new_p = calcPVal(num, ybus, busnum, t_list, v_list)
-            new_knowns[i] = -new_p - new_knowns[i]
+            net_injections[i] = new_p ###this is somehow changing knowns too
+            new_knowns[i] = new_knowns[i] - new_p
         else:
-            #FIXME: same as P
-            # subtractions may be wrong
-            new_knowns[i] = -calcQVal(num, ybus, busnum, t_list, v_list) - new_knowns[i]
-    #now solve for the new values
-    #get temp jac of just values oops
-    # print("new knowns")
-    # for i in range(knownnum):
-    #     print(new_knowns[i])
+            #Note: change generating/not +/- for P and Q IN EXCEL
+            new_q = calcQVal(num, ybus, busnum, t_list, v_list)
+            net_injections[i] = new_q
+            new_knowns[i] = new_knowns[i] - new_q
+    print("Net Injections: ")
+    for i in range(knownnum):
+        print(knowns[i].name, ': ', net_injections[i])
+
+
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
         for j in range(knownnum):
             temp_jac[i][j] = jacobian[i][j].val
     corrections = np.linalg.solve(temp_jac, new_knowns)
-    # print("corrections")
-    # for i in range(knownnum):
-    #     print(corrections[i])
     for j in range(knownnum):
-        xmat[j].val += corrections[j] #this is wrong
+        xmat[j].val += corrections[j]
         temp_num = int(xmat[j].name[1])
         temp_val = xmat[j].val
         if xmat[j].name[0] == "T":
@@ -907,13 +905,47 @@ def iterateDLF(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
-    return corrections
+    return corrections, new_knowns
 
 def DecoupledLoadFlow(conv_crit):
-    stuff = open('ex_nr.xlsx','r')
+    stuff = loadFile('ex_nr.xlsx')
+    v_list = stuff[0]
+    t_list = stuff[1]
+    p_list = stuff[2]
+    q_list = stuff[3]
+    lines = stuff[4]
+    r_list = stuff[5]
+    x_list = stuff[6]
+    r_shunt = stuff[7]
+    x_shunt = stuff[8]
+    knownnum = stuff[9]
+    busnum = stuff[10]
+    line_z = stuff[11]
+    numT = stuff[12]
+    numV = stuff[13]
+
+    knowns = [VarMat() for i in range(int(knownnum))]
+    xmat = [VarMat() for j in range(int(knownnum))]
+
+
+    getInitMats(xmat, knowns, p_list, q_list, busnum)
+    setInitGuess(knownnum, xmat)
+
+
+    yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
+    zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
+    getZYbus(busnum, yBus, zBus, line_z)
+
+
+    y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
+    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
+    yBusCutsemCalc(busnum, y_mini, lines, yBus)
+    #printMultiMat(busnum, yBus, False)
+    jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
+    nameJacElem(knownnum, knowns, xmat, jacobian)
     convergence = False
     itno = 0
-    while not convergence:
+    while not (convergence or itno > 10):
         itno += 1
         print("\n\nIteration #" + str(itno))
         temp_knowns = knowns
