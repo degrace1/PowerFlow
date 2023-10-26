@@ -11,6 +11,9 @@ def main():
     conv_crit = 0.000001
     newtonRhapson(conv_crit, False, '', 0, 0, 0)
     #FastDecoupled(conv_crit)
+    newtonRhapson(conv_crit)
+    FastDecoupled(conv_crit)
+    printDCPF()
 
 
 
