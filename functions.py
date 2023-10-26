@@ -10,7 +10,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = 'C:/Users/PC/git_repos/PowerFlow/' + filename
+    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr_ex1.xlsx'
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -571,51 +571,92 @@ def newtonRhapson(conv_crit):
                 count += 1
         convergence = count == 0
 
-def DCPF(yBus,busnum, knowns):
-    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr.xlsx'
+'''
+Function: Calculate DC Power Flow
+'''
+def calcDCPF():
+    stuff = loadFile('ex_nr_ex1.xlsx')
+    p_list = stuff[2]
+    lines = stuff[4]
+    r_list = stuff[5]
+    x_list = stuff[6]
+    x_shunt = stuff[8]
+    knownnum = stuff[9]
+    busnum = stuff[10]
+    line_z = stuff[11]
+    t_x = stuff[14]
+    t_a = stuff[15]
+
+    #Find slack_bus
+    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr_ex1.xlsx'
     #Remove row and column corresponding to slack bus
     ##check excel for bus_type and get index=slack_bus
     initial= pd.read_excel(filename, sheet_name='initial')
     bus_type=initial.loc[:,'bus_type']
     slack_bus=np.where(bus_type=='slack')[0][0]
-    y_bus_without_slack = np.delete(np.delete(yBus, slack_bus, axis=0), slack_bus, axis=1)
 
-    #Neglect the real part of the Ybus elements
-    for i in range(y_bus_without_slack.shape[0]):
-        for j in range(y_bus_without_slack.shape[1]):
-            complex_element = y_bus_without_slack[i, j]
-            real_part = np.real(complex_element)
-            imaginary_part = np.imag(complex_element)
-            # Set the real part to zero
-            y_bus_without_slack[i, j] = complex(imaginary_part)
+    # Obtain the yBus
+    yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
+    zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
+    getZYbus(busnum, yBus, zBus, line_z)
+    y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
+    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
+    yBusCutsemCalc(busnum, y_mini, lines, yBus)
 
-    #Delete the symbol j from the imaginary numbers left
-    y_bus_without_slack_magnitude=np.abs(y_bus_without_slack)
+    #Remove slack bus from Ybus and neglect the real part. Remove j from imaginary part
+    yBus_wo_slack=np.empty([len(yBus)-1, len(yBus)-1])
+    new_i = 0
+    for i in range(busnum):
+        if i == slack_bus:
+            continue  # Skip the slack bus row
+        new_j = 0
+        for j in range(busnum):
+            if j == slack_bus:
+                continue  # Skip the slack bus column
+            yBus_wo_slack[new_i][new_j] = yBus[i][j].val.imag
+            new_j += 1
+        new_i += 1
 
     #Multiply the matrix by -1
-    yBusDC=-1*y_bus_without_slack_magnitude
+    yBusDC=-1*yBus_wo_slack
 
-    #DC Load Flow
-    knowns_without_slack = np.delete(knowns, slack_bus, axis=0)#delete slack bus
+    p_without_slack = np.delete(p_list, slack_bus, axis=0)#delete slack bus
     inv_yBusDC=np.linalg.inv(yBusDC)
-    xmat = np.matmul(inv_yBusDC, knowns_without_slack)
-    new_row = np.zeros((1, xmat.shape[1]))
-    xmat = np.insert(xmat, slack_bus, new_row, axis=0)
+    xmat = np.dot(inv_yBusDC, p_without_slack)  #Angles
+    new_col = np.array([[0]])
+    xmat_final = np.insert(xmat, slack_bus, new_col, axis=0)
 
-    #calculate P in slack bus
+    #calculate P line flows
     slack_bus = int(slack_bus)
     sum = 0
-    PDC_slack = 0
-    for j in range(int(busnum)):
-        if j != slack_bus:
-            PDC_slack += (yBus[slack_bus][j])*(xmat[slack_bus]- xmat[j])
+    PlineDC = []
+    for line in lines:
+        try:
+            i, j = divmod(line, 10)
+            i -= 1  # Convert to 0-based
+            j -= 1  # Convert to 0-based
+            value = abs(yBus[i][j].val.imag) * (xmat_final[i] - xmat_final[j])
+            PlineDC.append(value)
+        except (ValueError, IndexError):
+            PlineDC.append(None)
 
-    return slack_bus, xmat, PDC_slack
+    return slack_bus, xmat_final, PlineDC
 
+'''
+Function: Prints DC Power Flow
+'''
+def printDCPF():
+    #Read the excel and save variables
+    stuff = loadFile('ex_nr_ex1.xlsx')
+    knownnum = stuff[9]
+    busnum = stuff[10]
+    knowns = [VarMat() for i in range(int(knownnum))]
+    yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
 
-
-
-
+    DCPF=calcDCPF()
+    print('Slack bus:', DCPF[0])
+    print('Angles (º):', DCPF[1])
+    print('Active Power flow through lines (pu):', DCPF[2])
 
 '''
 Function: loadbustype
