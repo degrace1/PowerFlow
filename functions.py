@@ -10,7 +10,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = 'C:/Users/Ximena/Desktop/project tet4205/PowerFlow/' + filename
+    filename = 'C:/Users/PC/git_repos/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -225,7 +225,7 @@ def piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a):
     line_num = lines.size
     #shape: 0 is 11, 1 is 12, 2 is 21, and 3 is 22
     for i in range(line_num):
-        if r_list[i] != '':
+        if np.isnan(r_list[i]) == False:
             if x_shunt[i] != '' and x_shunt[i] != 0:
                 y_mini[i][0] = 1/complex(r_list[i],x_list[i])+(complex(0,x_shunt[i])/2)
             else:
@@ -465,7 +465,7 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
 Function: iterate
 should update P, Q, known matrix, unknown matrix, and jacobian
 '''
-def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
+def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum1, qnum2):
     #first calculate the jacobian matrix
     calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
@@ -507,10 +507,20 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
-    return corrections, new_knowns
 
-def newtonRhapson(conv_crit):
-    stuff = loadFile('ex_nr.xlsx')
+    q_limit1 = calcQVal(qnum1-1, ybus, busnum, t_list, v_list)
+    q_limit2 = calcQVal(qnum2-1, ybus, busnum, t_list, v_list)
+    # get other values of P and Q
+    # for i in range(busnum):
+    #     if np.isnan(p_list[i]):
+    #         p_list[i] = calcPVal(i, ybus, busnum, t_list, v_list)
+    #     if np.isnan(q_list[i]):
+    #         q_list[i] = calcQVal(i, ybus, busnum, t_list, v_list)
+
+    return corrections, new_knowns, q_limit1, q_limit2
+
+def newtonRhapson(conv_crit, qlim_no1, qlim_no2, qlim_val):
+    stuff = loadFile('ex_nr_ex1.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -553,9 +563,11 @@ def newtonRhapson(conv_crit):
         itno += 1
         print("\n\nIteration #" + str(itno))
         temp_knowns = knowns
-        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum)
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum, qlim_no1, qlim_no2)
         corrections = outputs[0]
         rhs = outputs[1]
+        qlim1 = outputs[2]
+        qlim2 = outputs[3]
         print("Jacobian: ")
         printMultiMat(knownnum, jacobian, True)
         print("Corrections Vector (dV, dT): ")
@@ -564,12 +576,24 @@ def newtonRhapson(conv_crit):
         print(rhs)
         print("New voltage angles and magnitudes")
         printMat(knownnum, xmat)
+        # if qlim1 > qlim_val:
+        #     #type-switch
+
+
+
         count = 0
         for i in range(corrections.size):
             if abs(corrections[i]) > conv_crit:
                 cur = abs(corrections[i])
                 count += 1
         convergence = count == 0
+    for i in range(busnum):
+        if np.isnan(p_list[i]):
+            p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
+        if np.isnan(q_list[i]):
+            q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+    for i in range(busnum):
+        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
 
 def DCPF(yBus,busnum, knowns):
     filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr.xlsx'
