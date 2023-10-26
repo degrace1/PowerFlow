@@ -10,7 +10,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr_ex1.xlsx'
+    filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -225,7 +225,7 @@ def piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a):
     line_num = lines.size
     #shape: 0 is 11, 1 is 12, 2 is 21, and 3 is 22
     for i in range(line_num):
-        if r_list[i] != '':
+        if np.isnan(r_list[i]) == False:
             if x_shunt[i] != '' and x_shunt[i] != 0:
                 y_mini[i][0] = 1/complex(r_list[i],x_list[i])+(complex(0,x_shunt[i])/2)
             else:
@@ -465,7 +465,7 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
 Function: iterate
 should update P, Q, known matrix, unknown matrix, and jacobian
 '''
-def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
+def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum1, qnum2):
     #first calculate the jacobian matrix
     calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
@@ -507,10 +507,20 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
-    return corrections, new_knowns
 
-def newtonRhapson(conv_crit):
-    stuff = loadFile('ex_nr.xlsx')
+    q_limit1 = calcQVal(qnum1-1, ybus, busnum, t_list, v_list)
+    q_limit2 = calcQVal(qnum2-1, ybus, busnum, t_list, v_list)
+    # get other values of P and Q
+    # for i in range(busnum):
+    #     if np.isnan(p_list[i]):
+    #         p_list[i] = calcPVal(i, ybus, busnum, t_list, v_list)
+    #     if np.isnan(q_list[i]):
+    #         q_list[i] = calcQVal(i, ybus, busnum, t_list, v_list)
+
+    return corrections, new_knowns, q_limit1, q_limit2
+
+def newtonRhapson(conv_crit, qlim_no1, qlim_no2, qlim_val):
+    stuff = loadFile('ex_nr_ex1.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -553,9 +563,11 @@ def newtonRhapson(conv_crit):
         itno += 1
         print("\n\nIteration #" + str(itno))
         temp_knowns = knowns
-        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum)
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum, qlim_no1, qlim_no2)
         corrections = outputs[0]
         rhs = outputs[1]
+        qlim1 = outputs[2]
+        qlim2 = outputs[3]
         print("Jacobian: ")
         printMultiMat(knownnum, jacobian, True)
         print("Corrections Vector (dV, dT): ")
@@ -564,99 +576,70 @@ def newtonRhapson(conv_crit):
         print(rhs)
         print("New voltage angles and magnitudes")
         printMat(knownnum, xmat)
+        # if qlim1 > qlim_val:
+        #     #type-switch
+
+
+
         count = 0
         for i in range(corrections.size):
             if abs(corrections[i]) > conv_crit:
                 cur = abs(corrections[i])
                 count += 1
         convergence = count == 0
+    for i in range(busnum):
+        if np.isnan(p_list[i]):
+            p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
+        if np.isnan(q_list[i]):
+            q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+    for i in range(busnum):
+        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
 
-'''
-Function: Calculate DC Power Flow
-'''
-def calcDCPF():
-    stuff = loadFile('ex_nr_ex1.xlsx')
-    p_list = stuff[2]
-    lines = stuff[4]
-    r_list = stuff[5]
-    x_list = stuff[6]
-    x_shunt = stuff[8]
-    knownnum = stuff[9]
-    busnum = stuff[10]
-    line_z = stuff[11]
-    t_x = stuff[14]
-    t_a = stuff[15]
-
-    #Find slack_bus
-    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr_ex1.xlsx'
+def DCPF(yBus,busnum, knowns):
+    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr.xlsx'
     #Remove row and column corresponding to slack bus
     ##check excel for bus_type and get index=slack_bus
     initial= pd.read_excel(filename, sheet_name='initial')
     bus_type=initial.loc[:,'bus_type']
     slack_bus=np.where(bus_type=='slack')[0][0]
+    y_bus_without_slack = np.delete(np.delete(yBus, slack_bus, axis=0), slack_bus, axis=1)
 
-    # Obtain the yBus
-    yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
-    zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
-    getZYbus(busnum, yBus, zBus, line_z)
-    y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
-    yBusCutsemCalc(busnum, y_mini, lines, yBus)
+    #Neglect the real part of the Ybus elements
+    for i in range(y_bus_without_slack.shape[0]):
+        for j in range(y_bus_without_slack.shape[1]):
+            complex_element = y_bus_without_slack[i, j]
+            real_part = np.real(complex_element)
+            imaginary_part = np.imag(complex_element)
+            # Set the real part to zero
+            y_bus_without_slack[i, j] = complex(imaginary_part)
 
-    #Remove slack bus from Ybus and neglect the real part. Remove j from imaginary part
-    yBus_wo_slack=np.empty([len(yBus)-1, len(yBus)-1])
-    new_i = 0
-    for i in range(busnum):
-        if i == slack_bus:
-            continue  # Skip the slack bus row
-        new_j = 0
-        for j in range(busnum):
-            if j == slack_bus:
-                continue  # Skip the slack bus column
-            yBus_wo_slack[new_i][new_j] = yBus[i][j].val.imag
-            new_j += 1
-        new_i += 1
+    #Delete the symbol j from the imaginary numbers left
+    y_bus_without_slack_magnitude=np.abs(y_bus_without_slack)
 
     #Multiply the matrix by -1
-    yBusDC=-1*yBus_wo_slack
+    yBusDC=-1*y_bus_without_slack_magnitude
 
-    p_without_slack = np.delete(p_list, slack_bus, axis=0)#delete slack bus
+    #DC Load Flow
+    knowns_without_slack = np.delete(knowns, slack_bus, axis=0)#delete slack bus
     inv_yBusDC=np.linalg.inv(yBusDC)
-    xmat = np.dot(inv_yBusDC, p_without_slack)  #Angles
-    new_col = np.array([[0]])
-    xmat_final = np.insert(xmat, slack_bus, new_col, axis=0)
+    xmat = np.matmul(inv_yBusDC, knowns_without_slack)
+    new_row = np.zeros((1, xmat.shape[1]))
+    xmat = np.insert(xmat, slack_bus, new_row, axis=0)
 
-    #calculate P line flows
+    #calculate P in slack bus
     slack_bus = int(slack_bus)
     sum = 0
-    PlineDC = []
-    for line in lines:
-        try:
-            i, j = divmod(line, 10)
-            i -= 1  # Convert to 0-based
-            j -= 1  # Convert to 0-based
-            value = abs(yBus[i][j].val.imag) * (xmat_final[i] - xmat_final[j])
-            PlineDC.append(value)
-        except (ValueError, IndexError):
-            PlineDC.append(None)
+    PDC_slack = 0
+    for j in range(int(busnum)):
+        if j != slack_bus:
+            PDC_slack += (yBus[slack_bus][j])*(xmat[slack_bus]- xmat[j])
 
-    return slack_bus, xmat_final, PlineDC
+    return slack_bus, xmat, PDC_slack
 
-'''
-Function: Prints DC Power Flow
-'''
-def printDCPF():
-    #Read the excel and save variables
-    stuff = loadFile('ex_nr_ex1.xlsx')
-    knownnum = stuff[9]
-    busnum = stuff[10]
-    knowns = [VarMat() for i in range(int(knownnum))]
-    yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
 
-    DCPF=calcDCPF()
-    print('Slack bus:', DCPF[0])
-    print('Angles (º):', DCPF[1])
-    print('Active Power flow through lines (pu):', DCPF[2])
+
+
+
 
 '''
 Function: loadbustype
