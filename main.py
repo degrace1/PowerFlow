@@ -10,9 +10,11 @@ Newton Rhapson:
 
 def main():
     conv_crit = 0.000001
-    #newtonRhapson(conv_crit,1,1,10)
+    newtonRhapson(conv_crit, False, '', 0, 0, 0)
+    #FastDecoupled(conv_crit)
+    newtonRhapson(conv_crit)
     FastDecoupled(conv_crit)
-    #FDLF_jac(conv_crit,1,1,10)
+    printDCPF()
 
 
 

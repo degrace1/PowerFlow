@@ -2,6 +2,7 @@
 from classes import *
 import numpy as np
 import pandas as pd
+import math
 
 
 '''
@@ -10,7 +11,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = ('C:/Users/Ximena/Desktop/project tet4205/PowerFlow/') + filename
+    filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -465,7 +466,7 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
 Function: iterate
 should update P, Q, known matrix, unknown matrix, and jacobian
 '''
-def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum1, qnum2):
+def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum, num_lims):
     #first calculate the jacobian matrix
     calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     #make temp knowns matrix without the names
@@ -507,20 +508,120 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
+    if num_lims>1:
+        q_limit = [0 for i in range(num_lims)]
+        for i in range(num_lims):
+            q_limit[i] = calcQVal(qnum[i]-1, ybus, busnum, t_list, v_list)
+    elif num_lims == 1:
+        q_limit = calcQVal(qnum-1, ybus, busnum, t_list, v_list)
+    else:
+        q_limit = 0
 
-    q_limit1 = calcQVal(qnum1-1, ybus, busnum, t_list, v_list)
-    q_limit2 = calcQVal(qnum2-1, ybus, busnum, t_list, v_list)
-    # get other values of P and Q
-    # for i in range(busnum):
-    #     if np.isnan(p_list[i]):
-    #         p_list[i] = calcPVal(i, ybus, busnum, t_list, v_list)
-    #     if np.isnan(q_list[i]):
-    #         q_list[i] = calcQVal(i, ybus, busnum, t_list, v_list)
+    print("Jacobian: ")
+    printMultiMat(knownnum, jacobian, True)
+    print("Corrections Vector (dV, dT): ")
+    print(corrections)
+    print("RHS Vector (dP, dQ): ")
+    print(new_knowns)
+    print("New voltage magnitudes and angles (in degrees):")
+    for i in range(busnum):
+        print("|V|", i + 1, ": ", "{:.4f}".format(v_list[i]), "\t\t", "Theta", i + 1, ": ",
+              "{:.4f}".format(t_list[i] * 180 / math.pi))
 
-    return corrections, new_knowns, q_limit1, q_limit2
+    return corrections, q_limit
 
-def newtonRhapson(conv_crit, qlim_no1, qlim_no2, qlim_val):
-    stuff = loadFile('ex_nr_ex1.xlsx')
+def NR_loop(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit):
+    convergence = False
+    itno = 0
+    while not (convergence or itno > 10):
+        itno += 1
+        print("\n\nIteration #" + str(itno))
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, 0, 0)
+        corrections = outputs[0]
+        # Check corrections matrix for convergence
+        count = 0
+        for i in range(corrections.size):
+            if abs(corrections[i]) > conv_crit:
+                cur = abs(corrections[i])
+                count += 1
+        convergence = count == 0
+
+def addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat,ybus, t_list, v_list,
+                         busnum, qval, qnum, vval):
+    for i in range(knownnum+1):
+        if knowns[i].name[0] == 'P' or (knowns[i].name[0] == 'Q' and int(knowns[i].name[1]) < qnum):
+            new_knowns[i].val = knowns[i].val
+            new_xmat[i].val = xmat[i].val
+            new_knowns[i].name = knowns[i].name
+            new_xmat[i].name = xmat[i].name
+        elif knowns[i].name[0] == 'Q' and int(knowns[i].name[1]) == qnum:
+            new_knowns[i].val = qval
+            new_knowns[i].name = 'Q' + str(qnum)
+            new_xmat[i].val = vval
+            new_xmat[i].name = 'V' + str(qnum)
+        else:
+            new_knowns[i].val = knowns[i-1].val
+            new_knowns[i].name = knowns[i-1].name
+            new_xmat[i].val = xmat[i - 1].val
+            new_xmat[i].name = xmat[i - 1].name
+
+    nameJacElem(knownnum, knowns, xmat, new_jacobian)
+    calcJacElems(knownnum, new_jacobian, ybus, t_list, v_list, busnum)
+
+
+
+def NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list,
+                      qbus, num_lims, qlim_val):
+    convergence = False
+    itno = 0
+    while not (convergence or itno > 10):
+        itno += 1
+        print("\n\nIteration #" + str(itno))
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims)
+        corrections = outputs[0]
+        qlim = outputs[1]
+
+        # Reactive power limits
+        # First change matrix size
+        new_knowns = [VarMat() for i in range(int(knownnum + 1))]
+        new_xmat = [VarMat() for j in range(int(knownnum + 1))]
+        new_jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
+        limReached = 0
+        if num_lims > 1:
+            for i in range(num_lims):
+                if qlim[i] >= qlim_val or qlim[i] <= (-qlim_val):
+                    if qlim[i] >= qlim_val:
+                        q_limit_val = qlim_val
+                    else:
+                        q_limit_val = -qlim_val
+                    addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat, yBus, t_list,
+                                         v_list, busnum, q_limit_val, qbus[i], 1)
+                    limReached += 1
+        else:
+            if qlim >= qlim_val or qlim <= (-qlim_val):
+                if qlim >= qlim_val:
+                    q_limit_val = qlim_val
+                else:
+                    q_limit_val = -qlim_val
+                addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat, yBus, t_list,
+                                     v_list, busnum, q_limit_val, qbus, 1)
+                limReached = 1
+        if limReached >= 1:
+            iterate(knownnum+1, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims)
+
+        # Check corrections matrix for convergence
+        count = 0
+        for i in range(corrections.size):
+            if abs(corrections[i]) > conv_crit:
+                cur = abs(corrections[i])
+                count += 1
+        convergence = count == 0
+
+def NR_loop_qlim_end():
+    print('still to do')
+
+def newtonRhapson(conv_crit, qlimBool, qlimType, qbus, num_lims, qlim_val):
+    stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -557,89 +658,115 @@ def newtonRhapson(conv_crit, qlim_no1, qlim_no2, qlim_val):
     #printMultiMat(busnum, yBus, False)
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
-    convergence = False
-    itno = 0
-    while not (convergence or itno > 10):
-        itno += 1
-        print("\n\nIteration #" + str(itno))
-        temp_knowns = knowns
-        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum, qlim_no1, qlim_no2)
-        corrections = outputs[0]
-        rhs = outputs[1]
-        qlim1 = outputs[2]
-        qlim2 = outputs[3]
-        print("Jacobian: ")
-        printMultiMat(knownnum, jacobian, True)
-        print("Corrections Vector (dV, dT): ")
-        print(corrections)
-        print("RHS Vector (dP, dQ): ")
-        print(rhs)
-        print("New voltage angles and magnitudes")
-        printMat(knownnum, xmat)
-        # if qlim1 > qlim_val:
-        #     #type-switch
+    if qlimBool != True:
+        NR_loop(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit)
+    else:
+        if qlimType == 'end':
+            NR_loop_qlim_end()
+        elif qlimType == 'each':
+            #qbus is aarry or 1 value of the bus number q
+            #num_lims is how many buses have q limits
+            #qlim_val is the limit value
+            NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, qbus, num_lims, qlim_val)
+        else:
+            print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
 
 
-
-        count = 0
-        for i in range(corrections.size):
-            if abs(corrections[i]) > conv_crit:
-                cur = abs(corrections[i])
-                count += 1
-        convergence = count == 0
     for i in range(busnum):
         if np.isnan(p_list[i]):
             p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
         if np.isnan(q_list[i]):
             q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+    print('Final P and Q Values: ')
     for i in range(busnum):
-        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
+        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
 
-def DCPF(yBus,busnum, knowns):
-    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr.xlsx'
+'''
+Function: Calculate DC Power Flow
+'''
+def calcDCPF():
+    stuff = loadFile('ex_nr_ex1.xlsx')
+    p_list = stuff[2]
+    lines = stuff[4]
+    r_list = stuff[5]
+    x_list = stuff[6]
+    x_shunt = stuff[8]
+    knownnum = stuff[9]
+    busnum = stuff[10]
+    line_z = stuff[11]
+    t_x = stuff[14]
+    t_a = stuff[15]
+
+    #Find slack_bus
+    filename = 'C:/Users/Uxue/Desktop/TETE4205/PowerFlow/ex_nr_ex1.xlsx'
     #Remove row and column corresponding to slack bus
     ##check excel for bus_type and get index=slack_bus
     initial= pd.read_excel(filename, sheet_name='initial')
     bus_type=initial.loc[:,'bus_type']
     slack_bus=np.where(bus_type=='slack')[0][0]
-    y_bus_without_slack = np.delete(np.delete(yBus, slack_bus, axis=0), slack_bus, axis=1)
 
-    #Neglect the real part of the Ybus elements
-    for i in range(y_bus_without_slack.shape[0]):
-        for j in range(y_bus_without_slack.shape[1]):
-            complex_element = y_bus_without_slack[i, j]
-            real_part = np.real(complex_element)
-            imaginary_part = np.imag(complex_element)
-            # Set the real part to zero
-            y_bus_without_slack[i, j] = complex(imaginary_part)
+    # Obtain the yBus
+    yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
+    zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
+    getZYbus(busnum, yBus, zBus, line_z)
+    y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
+    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
+    yBusCutsemCalc(busnum, y_mini, lines, yBus)
 
-    #Delete the symbol j from the imaginary numbers left
-    y_bus_without_slack_magnitude=np.abs(y_bus_without_slack)
+    #Remove slack bus from Ybus and neglect the real part. Remove j from imaginary part
+    yBus_wo_slack=np.empty([len(yBus)-1, len(yBus)-1])
+    new_i = 0
+    for i in range(busnum):
+        if i == slack_bus:
+            continue  # Skip the slack bus row
+        new_j = 0
+        for j in range(busnum):
+            if j == slack_bus:
+                continue  # Skip the slack bus column
+            yBus_wo_slack[new_i][new_j] = yBus[i][j].val.imag
+            new_j += 1
+        new_i += 1
 
     #Multiply the matrix by -1
-    yBusDC=-1*y_bus_without_slack_magnitude
+    yBusDC=-1*yBus_wo_slack
 
-    #DC Load Flow
-    knowns_without_slack = np.delete(knowns, slack_bus, axis=0)#delete slack bus
+    p_without_slack = np.delete(p_list, slack_bus, axis=0)#delete slack bus
     inv_yBusDC=np.linalg.inv(yBusDC)
-    xmat = np.matmul(inv_yBusDC, knowns_without_slack)
-    new_row = np.zeros((1, xmat.shape[1]))
-    xmat = np.insert(xmat, slack_bus, new_row, axis=0)
+    xmat = np.dot(inv_yBusDC, p_without_slack)  #Angles
+    new_col = np.array([[0]])
+    xmat_final = np.insert(xmat, slack_bus, new_col, axis=0)
 
-    #calculate P in slack bus
+    #calculate P line flows
     slack_bus = int(slack_bus)
     sum = 0
-    PDC_slack = 0
-    for j in range(int(busnum)):
-        if j != slack_bus:
-            PDC_slack += (yBus[slack_bus][j])*(xmat[slack_bus]- xmat[j])
+    PlineDC = []
+    for line in lines:
+        try:
+            i, j = divmod(line, 10)
+            i -= 1  # Convert to 0-based
+            j -= 1  # Convert to 0-based
+            value = abs(yBus[i][j].val.imag) * (xmat_final[i] - xmat_final[j])
+            PlineDC.append(value)
+        except (ValueError, IndexError):
+            PlineDC.append(None)
 
-    return slack_bus, xmat, PDC_slack
+    return slack_bus, xmat_final, PlineDC
 
+'''
+Function: Prints DC Power Flow
+'''
+def printDCPF():
+    #Read the excel and save variables
+    stuff = loadFile('ex_nr_ex1.xlsx')
+    knownnum = stuff[9]
+    busnum = stuff[10]
+    knowns = [VarMat() for i in range(int(knownnum))]
+    yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
 
-
-
-
+    DCPF=calcDCPF()
+    print('Slack bus:', DCPF[0])
+    print('Angles (º):', DCPF[1])
+    print('Active Power flow through lines (pu):', DCPF[2])
 
 '''
 Function: loadbustype
@@ -857,13 +984,6 @@ def FastDecoupled(conv_crit):
         printMat(knownnum, rhs)
         print("New voltage angles and magnitudes")
         printMat(knownnum, xmat)
-
-        #start of Q constrains at PV buses
-        pv_Qs = [VarMat() for i in range(len(pvbus))]
-        for i in range(len(pvbus)):
-            pv_Qs[i].name = 'Q' + str(pvbus[i]+1)
-            pv_Qs[i].val = calcQVal(pvbus[i], yBus, busnum, t_list, v_list)
-
         count = 0
         for i in range(knownnum):
             if abs(corrections[i].val) > conv_crit:
