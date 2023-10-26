@@ -10,7 +10,7 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    filename = 'C:/Users/PC/git_repos/PowerFlow/' + filename
+    filename = ('C:/Users/Ximena/Desktop/project tet4205/PowerFlow/') + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -221,7 +221,7 @@ def calcYbus(busnum, yBus, zBus):
 Function: pi line model
 for creating a 2x2 admittance matrix for a one line system. Part 1 of the Cutsem method.
 '''
-def piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a):
+def piLine(knownnum: object, r_list: object, x_list: object, x_shunt: object, y_mini: object, lines: object, t_x: object, t_a: object) -> object:
     line_num = lines.size
     #shape: 0 is 11, 1 is 12, 2 is 21, and 3 is 22
     for i in range(line_num):
@@ -677,7 +677,7 @@ def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list,
             net_injections[i].val = calcPVal(num, ybus, busnum, t_list, v_list)
             new_knowns[i].val = new_knowns[i].val - net_injections[i].val
             dP_V[cue] = new_knowns[i].val / v_list[num]
-            cue =+ 1
+            cue += 1
             corrections[i].name = 'T' + knowns[i].name[1]
     # solve for dT
     dT = -np.dot(bp_inv, np.transpose(dP_V))
@@ -688,7 +688,7 @@ def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list,
             corrections[j].val = dT[cue]
             xmat[j].val += corrections[j].val
             t_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
-            cue = + 1
+            cue += 1
 
     # reactive power mismatches (using updated values of T)
     dQ_V = [0 for i in range(busnum - len(slackbus) - len(pvbus))]
@@ -700,7 +700,7 @@ def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list,
             net_injections[i].val = calcQVal(num, ybus, busnum, t_list, v_list)
             new_knowns[i].val = new_knowns[i].val - net_injections[i].val
             dQ_V[cue] = new_knowns[i].val / v_list[num]
-            cue = + 1
+            cue += 1
             corrections[i].name = 'V' + knowns[i].name[1]
     # solve for dV
     dV = -np.dot(bpp_inv, np.transpose(dQ_V))
@@ -711,7 +711,7 @@ def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list,
             corrections[j].val = dV[cue]
             xmat[j].val += corrections[j].val
             v_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
-            cue = + 1
+            cue += 1
 
     return corrections, new_knowns
 
@@ -740,13 +740,13 @@ def iterate_FDLF_endit(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t
             net_injections[i].val = calcPVal(num, ybus, busnum, t_list, v_list)
             new_knowns[i].val = new_knowns[i].val - net_injections[i].val
             dP_V[cueP] = new_knowns[i].val / v_list[num]
-            cueP =+ 1
+            cueP += 1
             corrections[i].name = 'T' + knowns[i].name[1]
         else:
             net_injections[i].val = calcQVal(num, ybus, busnum, t_list, v_list)
             new_knowns[i].val = new_knowns[i].val - net_injections[i].val
             dQ_V[cueQ] = new_knowns[i].val / v_list[num]
-            cueQ = + 1
+            cueQ += 1
             corrections[i].name = 'V' + knowns[i].name[1]
     # solve for dT and dV
     dT = -np.dot(bp_inv, np.transpose(dP_V))
@@ -759,12 +759,12 @@ def iterate_FDLF_endit(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t
             corrections[j].val = dT[cueP]
             xmat[j].val += corrections[j].val
             t_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
-            cueP = + 1
+            cueP += 1
         else:
             corrections[j].val = dV[cueQ]
             xmat[j].val += corrections[j].val
             v_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
-            cueQ = + 1
+            cueQ += 1
     return corrections, new_knowns
 
 '''
@@ -773,7 +773,7 @@ algorithm with the Fast Decoupled method
 '''
 def FastDecoupled(conv_crit):
     # Read the excel and save variables
-    stuff = loadFile('ex_nr.xlsx')
+    stuff = loadFile('ex_nr_ex1.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -788,25 +788,29 @@ def FastDecoupled(conv_crit):
     line_z = stuff[11]
     numT = stuff[12]
     numV = stuff[13]
+    t_x = stuff[14]
+    t_a = stuff[15]
+    # Get slack and pv buses
+    type_list = loadbustype('ex_nr_ex1.xlsx')
+    slackbus = np.where(type_list == 'slack')[0]
+    pvbus = np.where(type_list == 'pv')[0]
+
     knowns = [VarMat() for i in range(int(knownnum))]
     xmat = [VarMat() for j in range(int(knownnum))]
     getInitMats(xmat, knowns, p_list, q_list, busnum)
     setInitGuess(knownnum, xmat)
+
 
     # Obtain the yBus
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
     zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
     getZYbus(busnum, yBus, zBus, line_z)
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
+    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
     yBusCutsemCalc(busnum, y_mini, lines, yBus)
     print("YBus: ")
     printMultiMat(busnum, yBus, False)
 
-    # Get slack and pv buses
-    type_list = loadbustype('ex_nr.xlsx')
-    slackbus = np.where(type_list == 'slack')[0]
-    pvbus = np.where(type_list == 'pv')[0]
 
     # Obtain the inverses of B' and B''
     bp = np.empty([busnum-len(slackbus), busnum-len(slackbus)])
@@ -841,14 +845,15 @@ def FastDecoupled(conv_crit):
     itno = 0
     while not convergence:
         itno += 1
-        print("Iteration #" + str(itno))
+        print("\n\n Iteration #" + str(itno))
         temp_knowns = knowns
         # option of iterate with "iterate_FDLF" or "iterate_FDLF_endit"
-        outputs = iterate_FDLF_endit(knownnum, yBus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, temp_knowns,
-                               busnum)
+        outputs = iterate_FDLF(knownnum, yBus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, temp_knowns, busnum)
         corrections = outputs[0]
         rhs = outputs[1]
-        print("RHS Vector: ")
+        print("Corrections Vector (dV, dT): ")
+        printMat(knownnum, corrections)
+        print("RHS Vector (dP, dQ): ")
         printMat(knownnum, rhs)
         print("New voltage angles and magnitudes")
         printMat(knownnum, xmat)
@@ -959,7 +964,7 @@ def iterateDLF(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
     return corrections, new_knowns
 
 def DecoupledLoadFlow(conv_crit):
-    stuff = loadFile('ex_nr.xlsx')
+    stuff = loadFile('ex_nr_ex1.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
