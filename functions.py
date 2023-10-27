@@ -918,7 +918,7 @@ def FastDecoupled(conv_crit):
     knowns = [VarMat() for i in range(int(knownnum))]
     xmat = [VarMat() for j in range(int(knownnum))]
     getInitMats(xmat, knowns, p_list, q_list, busnum)
-    setInitGuess(knownnum, xmat)
+    setInitGuess(knownnum, xmat, v_list, t_list)
 
     # Obtain the yBus
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
@@ -1096,7 +1096,7 @@ def DecoupledLoadFlow(conv_crit):
 
 
     getInitMats(xmat, knowns, p_list, q_list, busnum)
-    setInitGuess(knownnum, xmat)
+    setInitGuess(knownnum, xmat, v_list, t_list)
 
 
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
