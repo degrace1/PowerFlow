@@ -106,12 +106,12 @@ Parameters:
 Returns
     xmat - matrix of unknowns with names and initial guesses
 """
-def setInitGuess(knownNum, xmat):
+def setInitGuess(knownNum, xmat, v_list, t_list):
     for i in range(int(knownNum)):
         if "V" in xmat[i].name:
-            xmat[i].val = 1
+            xmat[i].val = v_list[int(xmat[i].name[1])]
         elif "T" in xmat[i].name:
-            xmat[i].val = 0
+            xmat[i].val = t_list[int(xmat[i].name[1])]
 
 
 """
@@ -644,7 +644,7 @@ def newtonRhapson(conv_crit, qlimBool, qlimType, qbus, num_lims, qlim_val):
 
 
     getInitMats(xmat, knowns, p_list, q_list, busnum)
-    setInitGuess(knownnum, xmat)
+    setInitGuess(knownnum, xmat, v_list, t_list)
 
 
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
