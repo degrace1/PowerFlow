@@ -466,9 +466,14 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
 Function: iterate
 should update P, Q, known matrix, unknown matrix, and jacobian
 '''
-def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum, num_lims):
+def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum, num_lims, type):
     #first calculate the jacobian matrix
-    calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
+    if type == 'NR':
+        calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
+    elif type == 'DLF':
+        calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum)
+    else:
+        print('error thrown in which type of jacobian calculation')
     #make temp knowns matrix without the names
     new_knowns = [0 for i in range(knownnum)]
     net_injections = [0 for i in range(knownnum)]
@@ -530,13 +535,13 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
 
     return corrections, q_limit
 
-def NR_loop(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit):
+def loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, type):
     convergence = False
     itno = 0
     while not (convergence or itno > 10):
         itno += 1
         print("\n\nIteration #" + str(itno))
-        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, 0, 0)
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, 0, 0, type)
         corrections = outputs[0]
         # Check corrections matrix for convergence
         count = 0
@@ -577,7 +582,7 @@ def NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, bu
     while not (convergence or itno > 10):
         itno += 1
         print("\n\nIteration #" + str(itno))
-        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims)
+        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims, 'NR')
         corrections = outputs[0]
         qlim = outputs[1]
 
@@ -607,7 +612,7 @@ def NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, bu
                                      v_list, busnum, q_limit_val, qbus, 1)
                 limReached = 1
         if limReached >= 1:
-            iterate(knownnum+1, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims)
+            iterate(knownnum+1, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims, 'NR')
 
         # Check corrections matrix for convergence
         count = 0
@@ -620,8 +625,8 @@ def NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, bu
 def NR_loop_qlim_end():
     print('still to do')
 
-def newtonRhapson(conv_crit, qlimBool, qlimType, qbus, num_lims, qlim_val):
-    stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx')
+def newtonRhapson(conv_crit, qlimType, qbus, num_lims, qlim_val):
+    stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -655,21 +660,21 @@ def newtonRhapson(conv_crit, qlimBool, qlimType, qbus, num_lims, qlim_val):
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
     piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
     yBusCutsemCalc(busnum, y_mini, lines, yBus)
-    #printMultiMat(busnum, yBus, False)
+
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
-    if qlimBool != True:
-        NR_loop(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit)
+    if qlimType == 'none':
+        loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, 'NR')
+
+    elif qlimType == 'end':
+        NR_loop_qlim_end()
+    elif qlimType == 'each':
+        #qbus is array or 1 value of the bus number q
+        #num_lims is how many buses have q limits
+        #qlim_val is the limit value
+        NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, qbus, num_lims, qlim_val)
     else:
-        if qlimType == 'end':
-            NR_loop_qlim_end()
-        elif qlimType == 'each':
-            #qbus is aarry or 1 value of the bus number q
-            #num_lims is how many buses have q limits
-            #qlim_val is the limit value
-            NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, qbus, num_lims, qlim_val)
-        else:
-            print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
+        print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
 
 
     for i in range(busnum):
@@ -994,9 +999,6 @@ def FastDecoupled(conv_crit):
             q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
 
 
-
-
-
 '''
 Function: calculate jacobian elements and update matrix for DLF
 '''
@@ -1026,56 +1028,10 @@ def calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum):
             else:
                 print('error')
 
-'''
-Function: iterate
-should update P, Q, known matrix, unknown matrix, and jacobian for DLF
-'''
-def iterateDLF(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum):
-    #first calculate the jacobian matrix
-    calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum)
-    #make temp knowns matrix without the names
-    new_knowns = [0 for i in range(knownnum)]
-    net_injections = [0 for i in range(knownnum)]
-    for i in range(knownnum):
-        new_knowns[i] = knowns[i].val
-    for i in range(knownnum):
-        #for each known value, calculate the new value of P or Q and subtract them
-        num = int(knowns[i].name[1])-1
-        type = knowns[i].name[0]
-        if type == 'P':
-            #Note: change generating/not +/- for P and Q IN EXCEL
-            new_p = calcPVal(num, ybus, busnum, t_list, v_list)
-            net_injections[i] = new_p ###this is somehow changing knowns too
-            new_knowns[i] = new_knowns[i] - new_p
-        else:
-            #Note: change generating/not +/- for P and Q IN EXCEL
-            new_q = calcQVal(num, ybus, busnum, t_list, v_list)
-            net_injections[i] = new_q
-            new_knowns[i] = new_knowns[i] - new_q
-    print("Net Injections: ")
-    for i in range(knownnum):
-        print(knowns[i].name, ': ', net_injections[i])
 
 
-    temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
-    for i in range(knownnum):
-        for j in range(knownnum):
-            temp_jac[i][j] = jacobian[i][j].val
-    corrections = np.linalg.solve(temp_jac, new_knowns)
-    for j in range(knownnum):
-        xmat[j].val += corrections[j]
-        temp_num = int(xmat[j].name[1])
-        temp_val = xmat[j].val
-        if xmat[j].name[0] == "T":
-            t_list[(temp_num-1)] = temp_val
-        elif xmat[j].name[0] == "V":
-            v_list[(temp_num-1)] = temp_val
-        else:
-            print("error thrown in updating v and t lists")
-    return corrections, new_knowns
-
-def DecoupledLoadFlow(conv_crit):
-    stuff = loadFile('ex_nr.xlsx')
+def decoupledLoadFlow(conv_crit):
+    stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -1090,6 +1046,8 @@ def DecoupledLoadFlow(conv_crit):
     line_z = stuff[11]
     numT = stuff[12]
     numV = stuff[13]
+    t_x = stuff[14]
+    t_a = stuff[15]
 
     knowns = [VarMat() for i in range(int(knownnum))]
     xmat = [VarMat() for j in range(int(knownnum))]
@@ -1105,31 +1063,17 @@ def DecoupledLoadFlow(conv_crit):
 
 
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
+    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
     yBusCutsemCalc(busnum, y_mini, lines, yBus)
-    #printMultiMat(busnum, yBus, False)
+
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
-    convergence = False
-    itno = 0
-    while not (convergence or itno > 10):
-        itno += 1
-        print("\n\nIteration #" + str(itno))
-        temp_knowns = knowns
-        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, temp_knowns, xmat, busnum)
-        corrections = outputs[0]
-        rhs = outputs[1]
-        print("Jacobian: ")
-        printMultiMat(knownnum, jacobian, True)
-        print("Corrections Vector (dV, dT): ")
-        print(corrections)
-        print("RHS Vector (dP, dQ): ")
-        print(rhs)
-        print("New voltage angles and magnitudes")
-        printMat(knownnum, xmat)
-        count = 0
-        for i in range(corrections.size):
-            if abs(corrections[i]) > conv_crit:
-                cur = abs(corrections[i])
-                count += 1
-        convergence = count == 0
+    loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, 'DLF')
+    for i in range(busnum):
+        if np.isnan(p_list[i]):
+            p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
+        if np.isnan(q_list[i]):
+            q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+    print('Final P and Q Values: ')
+    for i in range(busnum):
+        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))

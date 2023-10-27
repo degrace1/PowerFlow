@@ -9,11 +9,15 @@ Newton Rhapson:
 
 def main():
     conv_crit = 0.000001
-    newtonRhapson(conv_crit, False, '', 0, 0, 0)
-    #FastDecoupled(conv_crit)
-    newtonRhapson(conv_crit)
+    qlim_type = 'none' #each #end
+    qbus = 0 #1 #[1 2]
+    num_lims = 0 #1 #2
+    qlim_val = 0 #0.5
+    newtonRhapson(conv_crit, qlim_type, qbus, num_lims, qlim_val)
+    FastDecoupled(conv_crit)
     FastDecoupled(conv_crit)
     printDCPF()
+    decoupledLoadFlow(conv_crit)
 
 
 
