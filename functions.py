@@ -109,9 +109,9 @@ Returns
 def setInitGuess(knownNum, xmat, v_list, t_list):
     for i in range(int(knownNum)):
         if "V" in xmat[i].name:
-            xmat[i].val = v_list[int(xmat[i].name[1])]
+            xmat[i].val = v_list[int(xmat[i].name[1])-1]
         elif "T" in xmat[i].name:
-            xmat[i].val = t_list[int(xmat[i].name[1])]
+            xmat[i].val = t_list[int(xmat[i].name[1])-1]
 
 
 """
@@ -463,6 +463,35 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
                 print('error')
 
 '''
+Function: calculate jacobian elements and update matrix for DLF
+'''
+def calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum):
+    for i in range(knownnum):
+        for j in range(knownnum):
+            # Ps
+            # this i and j isnt from the loop. its from the value from P/Q and V/T
+            i_temp = int(jacobian[i][j].name[2])-1
+            j_temp = int(jacobian[i][j].name[5])-1
+            if jacobian[i][j].type == 'dpidti':
+                jacobian[i][j].val = dpidti(i_temp, v_list, ybus, t_list, busnum)
+            elif jacobian[i][j].type == 'dpidtj':
+                jacobian[i][j].val = dpidtj(i_temp, j_temp, v_list, ybus, t_list)
+            elif jacobian[i][j].type == 'dpidvi':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dpidvj':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dqidti':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dqidtj':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dqidvi':
+                jacobian[i][j].val = dqidvi(i_temp, v_list, ybus, t_list, busnum)
+            elif jacobian[i][j].type == 'dqidvj':
+                jacobian[i][j].val = dqidvj(i_temp, j_temp, v_list, ybus, t_list)
+            else:
+                print('error')
+
+'''
 Function: iterate
 should update P, Q, known matrix, unknown matrix, and jacobian
 '''
@@ -486,7 +515,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
         if type == 'P':
             #Note: change generating/not +/- for P and Q IN EXCEL
             new_p = calcPVal(num, ybus, busnum, t_list, v_list)
-            net_injections[i] = new_p ###this is somehow changing knowns too
+            net_injections[i] = new_p
             new_knowns[i] = new_knowns[i] - new_p
         else:
             #Note: change generating/not +/- for P and Q IN EXCEL
@@ -513,12 +542,10 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
-    if num_lims>1:
+    if num_lims>=1:
         q_limit = [0 for i in range(num_lims)]
         for i in range(num_lims):
             q_limit[i] = calcQVal(qnum[i]-1, ybus, busnum, t_list, v_list)
-    elif num_lims == 1:
-        q_limit = calcQVal(qnum-1, ybus, busnum, t_list, v_list)
     else:
         q_limit = 0
 
@@ -553,34 +580,53 @@ def loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, 
 
 def addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat,ybus, t_list, v_list,
                          busnum, qval, qnum, vval):
+    knownindex = 0
+    breakbool = True
+    temp_index=0
+    while breakbool:
+        if temp_index == knownnum:
+            knownindex = temp_index
+            breakbool = False
+        else:
+            if knowns[temp_index].name[0] == 'Q':
+                if int(knowns[temp_index].name[1]) > qnum:
+                    knownindex = temp_index
+                    breakbool = False
+        temp_index+=1
+
+
+    done = False
     for i in range(knownnum+1):
-        if knowns[i].name[0] == 'P' or (knowns[i].name[0] == 'Q' and int(knowns[i].name[1]) < qnum):
+        if i < knownindex:
             new_knowns[i].val = knowns[i].val
             new_xmat[i].val = xmat[i].val
             new_knowns[i].name = knowns[i].name
             new_xmat[i].name = xmat[i].name
-        elif knowns[i].name[0] == 'Q' and int(knowns[i].name[1]) == qnum:
+        elif i == knownindex:
             new_knowns[i].val = qval
             new_knowns[i].name = 'Q' + str(qnum)
             new_xmat[i].val = vval
             new_xmat[i].name = 'V' + str(qnum)
+            knownindex = i
         else:
-            new_knowns[i].val = knowns[i-1].val
-            new_knowns[i].name = knowns[i-1].name
-            new_xmat[i].val = xmat[i - 1].val
-            new_xmat[i].name = xmat[i - 1].name
+            new_knowns[i + 1].val = knowns[i].val
+            new_knowns[i + 1].name = knowns[i].name
+            new_xmat[i + 1].val = xmat[i].val
+            new_xmat[i + 1].name = xmat[i].name
 
-    nameJacElem(knownnum, knowns, xmat, new_jacobian)
-    calcJacElems(knownnum, new_jacobian, ybus, t_list, v_list, busnum)
 
+    nameJacElem(knownnum+1, new_knowns, new_xmat, new_jacobian)
+    #calcJacElems(knownnum, new_jacobian, ybus, t_list, v_list, busnum)
+    return knownindex
 
 
 def NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list,
-                      qbus, num_lims, qlim_val):
+                      qbus, qlim_val):
     convergence = False
     itno = 0
     while not (convergence or itno > 10):
         itno += 1
+        num_lims = len(qbus)
         print("\n\nIteration #" + str(itno))
         outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims, 'NR')
         corrections = outputs[0]
@@ -588,31 +634,77 @@ def NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, bu
 
         # Reactive power limits
         # First change matrix size
+        # this is only if one more than knownnum
         new_knowns = [VarMat() for i in range(int(knownnum + 1))]
         new_xmat = [VarMat() for j in range(int(knownnum + 1))]
-        new_jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
-        limReached = 0
-        if num_lims > 1:
-            for i in range(num_lims):
-                if qlim[i] >= qlim_val or qlim[i] <= (-qlim_val):
-                    if qlim[i] >= qlim_val:
-                        q_limit_val = qlim_val
-                    else:
-                        q_limit_val = -qlim_val
-                    addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat, yBus, t_list,
-                                         v_list, busnum, q_limit_val, qbus[i], 1)
-                    limReached += 1
-        else:
-            if qlim >= qlim_val or qlim <= (-qlim_val):
-                if qlim >= qlim_val:
-                    q_limit_val = qlim_val
+        new_jacobian = [[JacElem() for i in range(int(knownnum+1))] for j in range(int(knownnum+1))]
+
+
+        v_orig = [1 for i in range(busnum)] #original set magnitude of voltage
+        for i in range(busnum):
+            v_orig[i] = v_list[i]
+        q_limit_val = 0
+        #one by one option:
+
+        limitbool = False
+        knownindex = 0
+        if qlim[0] >= qlim_val:
+            knownindex = addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat, yBus, t_list,
+                                     v_list, busnum, qlim_val, qbus[0], 1)
+            limitbool = True
+            printMultiMat(knownnum + 1, new_jacobian, True)
+            q_limit_val = qlim_val
+        elif qlim[0] <= -qlim_val:
+            knownindex = addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat, yBus, t_list,
+                                 v_list, busnum, -qlim_val, qbus[0], 1)
+            printMultiMat(knownnum+1, new_jacobian, True)
+            limitbool = True
+            q_limit_val = -qlim_val
+
+        while limitbool:
+            check_q = iterate(knownnum+1, new_jacobian, yBus, t_list, v_list, new_knowns, new_xmat, busnum, qbus,
+                              num_lims, 'NR')
+            corrections = check_q[0]
+            qlim = check_q[1]
+
+            if q_limit_val < 0:
+            # fixed at lower limit
+            #while v_list[qbus[0] - 1] >= v_orig[qbus[0] - 1] or knowns[knownindex].val >= qlim_val or knowns[knownindex].val <= -qlim_val:
+                if v_list[qbus[0] - 1] >= v_orig[qbus[0] - 1]:
+                    # leave as pq bus, iterate
+                    new_knowns[knownindex].val = -qlim_val
                 else:
-                    q_limit_val = -qlim_val
-                addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat, yBus, t_list,
-                                     v_list, busnum, q_limit_val, qbus, 1)
-                limReached = 1
-        if limReached >= 1:
-            iterate(knownnum+1, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims, 'NR')
+                    if qlim[0] >= qlim_val:
+                        new_knowns[knownindex].val = qlim_val
+                        q_limit_val = qlim_val
+                    elif qlim[0] <= -qlim_val:
+                        new_knowns[knownindex].val = -qlim_val
+                        q_limit_val = -qlim_val
+                    else:
+                        limitbool = False
+                        print('done with type switch')
+            else:
+            # fixed at upper limit
+                if v_list[qbus[0] - 1] <= v_orig[qbus[0] - 1]:
+                    # leave as pq bus, iterate
+                    new_knowns[knownindex].val = qlim_val
+                else:
+                    if qlim[0] >= qlim_val:
+                        new_knowns[knownindex].val = qlim_val
+                        q_limit_val = qlim_val
+                    elif qlim[0] <= -qlim_val:
+                        new_knowns[knownindex].val = -qlim_val
+                        q_limit_val = -qlim_val
+                    else:
+                        print('done with type switch')
+                        limitbool = False
+
+        print("switching back to pv bus")
+        v_list[qbus[0] - 1] = v_orig[qbus[0] - 1]
+        for i in range(knownnum):
+            #fixme: copy the values from the new xmatrix to the old
+            xmat[i]
+            xmat[knownindex].val = v_orig[qbus[0] - 1]
 
         # Check corrections matrix for convergence
         count = 0
@@ -625,7 +717,7 @@ def NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, bu
 def NR_loop_qlim_end():
     print('still to do')
 
-def newtonRhapson(conv_crit, qlimType, qbus, num_lims, qlim_val):
+def newtonRhapson(conv_crit, qlimType, qbus, qlim_val):
     stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
@@ -672,7 +764,8 @@ def newtonRhapson(conv_crit, qlimType, qbus, num_lims, qlim_val):
         #qbus is array or 1 value of the bus number q
         #num_lims is how many buses have q limits
         #qlim_val is the limit value
-        NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, qbus, num_lims, qlim_val)
+        NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list,
+                      qbus, qlim_val)
     else:
         print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
 
@@ -999,34 +1092,6 @@ def FastDecoupled(conv_crit):
             q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
 
 
-'''
-Function: calculate jacobian elements and update matrix for DLF
-'''
-def calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum):
-    for i in range(knownnum):
-        for j in range(knownnum):
-            # Ps
-            # this i and j isnt from the loop. its from the value from P/Q and V/T
-            i_temp = int(jacobian[i][j].name[2])-1
-            j_temp = int(jacobian[i][j].name[5])-1
-            if jacobian[i][j].type == 'dpidti':
-                jacobian[i][j].val = dpidti(i_temp, v_list, ybus, t_list, busnum)
-            elif jacobian[i][j].type == 'dpidtj':
-                jacobian[i][j].val = dpidtj(i_temp, j_temp, v_list, ybus, t_list)
-            elif jacobian[i][j].type == 'dpidvi':
-                jacobian[i][j].val = 0
-            elif jacobian[i][j].type == 'dpidvj':
-                jacobian[i][j].val = 0
-            elif jacobian[i][j].type == 'dqidti':
-                jacobian[i][j].val = 0
-            elif jacobian[i][j].type == 'dqidtj':
-                jacobian[i][j].val = 0
-            elif jacobian[i][j].type == 'dqidvi':
-                jacobian[i][j].val = dqidvi(i_temp, v_list, ybus, t_list, busnum)
-            elif jacobian[i][j].type == 'dqidvj':
-                jacobian[i][j].val = dqidvj(i_temp, j_temp, v_list, ybus, t_list)
-            else:
-                print('error')
 
 
 
