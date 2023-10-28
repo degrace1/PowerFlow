@@ -13,11 +13,11 @@ def main():
     qlim_type = 'each' #none #end #change this to none to do regular NR wihtout qlims
     qbus = [3] #[1 2]
     qlim_val = 0.4 #0
-    newtonRhapson(conv_crit, qlim_type, qbus, qlim_val)
+    # newtonRhapson(conv_crit, qlim_type, qbus, qlim_val)
     # FastDecoupled(conv_crit)
     # FastDecoupled(conv_crit)
     # printDCPF()
-    # decoupledLoadFlow(conv_crit)
+    decoupledLoadFlow(conv_crit)
 
 
 
