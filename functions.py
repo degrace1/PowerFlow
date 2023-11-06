@@ -882,7 +882,7 @@ gets an string array with the bus types
 '''
 def loadbustype(filename):
     #read excel file
-    filename = 'C:/Users/Ximena/Desktop/project tet4205/PowerFlow/' + filename
+    filename = 'c:/Users/PC/git_repos/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract bus type as string
     type_list = initial.loc[:, 'bus_type'].to_numpy()
@@ -1008,7 +1008,7 @@ algorithm with the Fast Decoupled method
 '''
 def FastDecoupled(conv_crit):
     # Read the excel and save variables
-    stuff = loadFile('ex_nr.xlsx')
+    stuff = loadFile('ex_nr_test2.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -1023,6 +1023,8 @@ def FastDecoupled(conv_crit):
     line_z = stuff[11]
     numT = stuff[12]
     numV = stuff[13]
+    t_x = stuff[14]
+    t_a = stuff[15]
     knowns = [VarMat() for i in range(int(knownnum))]
     xmat = [VarMat() for j in range(int(knownnum))]
     getInitMats(xmat, knowns, p_list, q_list, busnum)
@@ -1033,13 +1035,13 @@ def FastDecoupled(conv_crit):
     zBus = [[complex(0, 0) for i in range(int(busnum))] for j in range(int(busnum))]
     getZYbus(busnum, yBus, zBus, line_z)
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines)
+    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
     yBusCutsemCalc(busnum, y_mini, lines, yBus)
     print("YBus: ")
     printMultiMat(busnum, yBus, False)
 
     # Get slack and pv buses
-    type_list = loadbustype('ex_nr.xlsx')
+    type_list = loadbustype('ex_nr_test2.xlsx')
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
 
@@ -1085,8 +1087,11 @@ def FastDecoupled(conv_crit):
         rhs = outputs[1]
         print("RHS Vector: ")
         printMat(knownnum, rhs)
+        print('')
         print("New voltage angles and magnitudes")
         printMat(knownnum, xmat)
+        print('')
+
         count = 0
         for i in range(knownnum):
             if abs(corrections[i].val) > conv_crit:
@@ -1101,12 +1106,21 @@ def FastDecoupled(conv_crit):
         if np.isnan(q_list[i]):
             q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
 
+    print('Flow lines and Losses: ')
+    print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
+    for elem in lines:
+        line=str(elem)        
+        print("P", int(line[0]), ": ", "{:.4f}".format(p_list[int(line[0])-1]), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(p_list[int(line[1])-1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(p_list[int(line[0])-1]-p_list[int(line[1])-1]))
+    print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
+    for elem in lines:
+        line=str(elem)        
+        print("Q", int(line[0]), ": ", "{:.4f}".format(q_list[int(line[0])-1]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(q_list[int(line[1])-1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(q_list[int(line[0])-1]-q_list[int(line[1])-1]))
 
 
 
 
 def decoupledLoadFlow(conv_crit):
-    stuff = loadFile('ex_nr_ex1.xlsx')
+    stuff = loadFile('ex_nr_test2.xlsx')
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
