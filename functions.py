@@ -779,6 +779,16 @@ def newtonRhapson(conv_crit, qlimType, qbus, qlim_val):
     for i in range(busnum):
         print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
 
+    print('Flow lines and Losses: ')
+    print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
+    for elem in lines:
+        line=str(elem)        
+        print("P", int(line[0]), ": ", "{:.4f}".format(p_list[int(line[0])-1]), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(p_list[int(line[1])-1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(p_list[int(line[0])-1]-p_list[int(line[1])-1]))
+    print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
+    for elem in lines:
+        line=str(elem)        
+        print("Q", int(line[0]), ": ", "{:.4f}".format(q_list[int(line[0])-1]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(q_list[int(line[1])-1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(q_list[int(line[0])-1]-q_list[int(line[1])-1]))
+
 '''
 Function: Calculate DC Power Flow
 '''
@@ -1139,9 +1149,9 @@ def decoupledLoadFlow(conv_crit):
             p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
         if np.isnan(q_list[i]):
             q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
-    # print('Final P and Q Values: ')
-    # for i in range(busnum):
-    #     print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
+    print('Final P and Q Values: ')
+    for i in range(busnum):
+        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
     print('Flow lines and Losses: ')
     print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
     for elem in lines:
@@ -1150,4 +1160,4 @@ def decoupledLoadFlow(conv_crit):
     print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
     for elem in lines:
         line=str(elem)        
-        print("Q", int(line[0]), ": ", "{:.4f}".format(q_list[int(line[0])]-1), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(q_list[int(line[1])-1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(q_list[int(line[0])-1]-q_list[int(line[1])-1]))
+        print("Q", int(line[0]), ": ", "{:.4f}".format(q_list[int(line[0])-1]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(q_list[int(line[1])-1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(q_list[int(line[0])-1]-q_list[int(line[1])-1]))
