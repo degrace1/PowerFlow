@@ -3,6 +3,7 @@ from classes import *
 import numpy as np
 import pandas as pd
 import math
+import cmath
 
 
 '''
@@ -161,60 +162,40 @@ def nameYbus(busnum, yBus):
 
 
 
-
 '''
 Function: pi line model
 for creating a 2x2 admittance matrix for a one line system. Part 1 of the Cutsem method.
 '''
-def piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a):
+def piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a):
     line_num = lines.size
     #shape: 0 is 11, 1 is 12, 2 is 21, and 3 is 22
     for i in range(line_num):
         if np.isnan(r_list[i]) == False:
             if x_shunt[i] != '' and x_shunt[i] != 0:
-                y_mini[i][0] = 1/complex(r_list[i],x_list[i])+(complex(0,x_shunt[i])) #divide by 2 shunt in excel
+                y_mini[i][0] = 1/complex(r_list[i],x_list[i])+(complex(0,x_shunt[i])) #divide by 2 shunt in excel (if whole line)
             else:
                 y_mini[i][0] = 1 / complex(r_list[i], x_list[i])
             y_mini[i][1] = -1/complex(r_list[i],x_list[i])
             y_mini[i][2] = y_mini[i][1]
             y_mini[i][3] = y_mini[i][0]
         else:
-            y_mini[i][0] = 1/complex(0, t_x[i])/(t_a[i]**2)
-            y_mini[i][1] = -1/complex(0, t_x[i])/t_a[i]
+            y_mini[i][0] = 1/complex(0, t_x[i]) #/(t_a[i]**2)  # turns out this isnt needed
+            y_mini[i][1] = -1/complex(0, t_x[i]) #/t_a[i]      # same here
             y_mini[i][2] = y_mini[i][1]
             y_mini[i][3] = 1/complex(0, t_x[i])
-
-
 
 '''
 Function: Ybus calculations with cutsem algorithm/pi line model
 '''
-def yBusCutsemCalc(busnum, y_mini, lines, yBus):
-    for i in range(busnum):
-        for j in range(busnum):
-            if i == j: #diagonal element should be sum of all Y11 minis that connect to said i value
-                sum = 0
-                for k in range(lines.size): #loop through lines (k will also be the index of y_mini matrices)
-                    str_temp = str(lines[k]) #line number like '12' or '23'
-                    if str_temp[0] == str(i+1): #if in the list of lines, this specific line starts with i 'ik'
-                        sum += y_mini[k][0] #add first element (Y11) of the pi-line y_mini
-                    elif str_temp[1] == str(i+1): #or if its line 'ki'
-                        sum += y_mini[k][0] #add first element (Y11) of the pi-line y_mini
-                yBus[i][j].val = sum
-            else: #off diagonal element should be the off-diagonal element of y_mini from bus i to j
-                #first check if this line exists to see if the mini Y exists
-                str_ind1 = int(str(i+1) + str(j+1))
-                str_ind2 = int(str(j+1) + str(i+1))
-                mini_index1 = np.where(lines == str_ind1)
-                mini_index2 = np.where(lines == str_ind2)
-                if str_ind1 in lines:
-                    yBus[i][j].val = y_mini[mini_index1[0][0]][1] #get Y12 value of the sub bus
-                elif str_ind2 in lines:
-                    yBus[i][j].val = y_mini[mini_index2[0][0]][1]
-                else:
-                    yBus[i][j].val = complex(0,0)
-
-
+def yBusCutsemCalc(y_mini, lines, yBus):
+    for i in range(len(lines)):
+        str_temp = str(lines[i])
+        a = int(str_temp[0])-1
+        b = int(str_temp[1])-1
+        yBus[a][a].val += y_mini[i][0]
+        yBus[a][b].val += y_mini[i][1]
+        yBus[b][a].val += y_mini[i][2]
+        yBus[b][b].val += y_mini[i][3]
 '''
 Function: calculate uij
 '''
@@ -232,28 +213,20 @@ def tij(gij, bij, thetai, thetaj):
 '''
 Function: calculate P value
 '''
-def calcPVal(num, yBus, busnum, T, V):
-    num = int(num)
-    p = (V[num]**2) * yBus[num][num].val.real
-    sum = 0
-    for j in range(int(busnum)):
-        if j != num:
-            sum += V[j] * tij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
-    return p + (-V[num] * sum)
-
+def calcP(i, yBus, busnum, T, V):
+    p = 0
+    for j in range(busnum):
+        p += V[i]*V[j]*abs(yBus[i][j].val)*np.cos(T[i]-T[j]-cmath.phase(yBus[i][j].val))
+    return p
 
 '''
 Function: calculate Q value
 '''
-def calcQVal(num, yBus, busnum, T, V):
-    num = int(num)
-    q = -(V[num]**2) * yBus[num][num].val.imag
-    sum = 0
+def calcQ(i, yBus, busnum, T, V):
+    q = 0
     for j in range(busnum):
-        if j != num:
-            sum += V[j] * uij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
-    return q + (-V[num] * sum)
-
+        q += V[i]*V[j]*abs(yBus[i][j].val)*np.sin(T[i]-T[j]-cmath.phase(yBus[i][j].val))
+    return q
 '''
 Function: calculate P line flows From, To, losses
 '''
@@ -261,8 +234,8 @@ def CalcPflow(line,v_list,t_list,yBus):
     line=str(line)
     i=int(line[0])-1
     j=int(line[1])-1
-    FromPflow = np.abs(v_list[i]) * np.abs(v_list[j]) * tij(yBus[i][j].val.real, yBus[i][j].val.imag, t_list[i], t_list[j])
-    ToPflow = np.abs(v_list[j]) * np.abs(v_list[i]) * tij(yBus[j][i].val.real, yBus[j][i].val.imag, t_list[j], t_list[i])
+    FromPflow = v_list[i] * v_list[j] * abs(yBus[i][j].val)*np.cos(t_list[i]-t_list[j]-cmath.phase(yBus[i][j].val))
+    ToPflow = v_list[j] * v_list[i] * abs(yBus[j][i].val)*np.cos(t_list[j]-t_list[i]-cmath.phase(yBus[j][i].val)) #tij(yBus[j][i].val.real, yBus[j][i].val.imag, t_list[j], t_list[i])
     Ploss = np.abs(np.abs(ToPflow) - np.abs(FromPflow))
     return FromPflow, ToPflow, Ploss
 
@@ -273,8 +246,8 @@ def CalcQflow(line,v_list,t_list,yBus):
     line=str(line)
     i=int(line[0])-1
     j=int(line[1])-1
-    FromQflow = np.abs(v_list[i]) * np.abs(v_list[j]) * uij(yBus[i][j].val.real, yBus[i][j].val.imag, t_list[i], t_list[j])
-    ToQflow = np.abs(v_list[j]) * np.abs(v_list[i]) * uij(yBus[j][i].val.real, yBus[j][i].val.imag, t_list[j], t_list[i])
+    FromQflow = v_list[i] * v_list[j] * abs(yBus[i][j].val)*np.sin(t_list[i]-t_list[j]-cmath.phase(yBus[i][j].val)) #uij(yBus[i][j].val.real, yBus[i][j].val.imag, t_list[i], t_list[j])
+    ToQflow = v_list[j] * v_list[i] * abs(yBus[j][i].val)*np.sin(t_list[j]-t_list[i]-cmath.phase(yBus[j][i].val)) #uij(yBus[j][i].val.real, yBus[j][i].val.imag, t_list[j], t_list[i])
     Qloss = np.abs(np.abs(ToQflow) - np.abs(FromQflow))
     return FromQflow, ToQflow, Qloss
 
@@ -352,7 +325,6 @@ def dqidvi(i, V, yBus, T, busnum):
     sum = -2 * V[i] * yBus[i][i].val.imag
     for j in range(busnum):
         if j != i:
-            temp = uij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
             sum += -V[j] * uij(yBus[i][j].val.real, yBus[i][j].val.imag, T[i], T[j])
     return sum
 
@@ -482,12 +454,12 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
         type = knowns[i].name[0]
         if type == 'P':
             #Note: change generating/not +/- for P and Q IN EXCEL
-            new_p = calcPVal(num, ybus, busnum, t_list, v_list)
+            new_p = calcP(num, ybus, busnum, t_list, v_list) # calcPVal(num, ybus, busnum, t_list, v_list)
             net_injections[i] = new_p
             new_knowns[i] = new_knowns[i] - new_p
         else:
             #Note: change generating/not +/- for P and Q IN EXCEL
-            new_q = calcQVal(num, ybus, busnum, t_list, v_list)
+            new_q = calcQ(num, ybus, busnum, t_list, v_list) # calcQVal(num, ybus, busnum, t_list, v_list)
             net_injections[i] = new_q
             new_knowns[i] = new_knowns[i] - new_q
     print("Net Injections: ")
@@ -513,7 +485,7 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
     if num_lims>=1:
         q_limit = [0 for i in range(num_lims)]
         for i in range(num_lims):
-            q_limit[i] = calcQVal(qnum[i]-1, ybus, busnum, t_list, v_list)
+            q_limit[i] = calcQ(qnum[i]-1, ybus, busnum, t_list, v_list)
     else:
         q_limit = 0
 
@@ -589,8 +561,8 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
         print("iteration numer: " + str(itno))
         #calc all P/Q
         for i in range(busnum):
-            P[i] = calcPVal(i, yBus, busnum, t_list, v_list)
-            Q[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+            P[i] = calcP(i, yBus, busnum, t_list, v_list)
+            Q[i] = calcQ(i, yBus, busnum, t_list, v_list)
 
         #i_qlim_lower = []
         #i_qlim_upper = []
@@ -685,14 +657,17 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
             elif v_list[i] > v_orig[i] and Q[i] <= -q_lim[i]:
                 q_list[i] = -q_lim[i]
             else:
+                # set v value back to original
                 v_list[i] = v_orig[i]
                 i_del = i
+                # delete from upper list
                 i_qlim_upper = [x for x in i_qlim_upper if x != i_del]
+                # set q back to nan
                 q_list[i] = [np.nan]
+                # delete from the xmatrix and mismatch
                 np.delete(new_xmat, i)
                 np.delete(new_knowns, i)
 
-        #need to delete from xmatrix
 
         for i in i_qlim_lower:
             if v_list[i] >= v_orig[i]:
@@ -702,10 +677,14 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
             elif v_list[i] < v_orig[i] and Q[i] >= q_lim[i]:
                 q_list[i] = -q_lim[i]
             else:
+                # set v back to original
                 v_list[i] = v_orig[i]
                 i_del = i
+                # delete from lower list
                 i_qlim_lower = [x for x in i_qlim_lower if x != i_del]
+                # set q back to nan
                 q_list[i] = [np.nan]
+                # delete from xmatrix and mismatch
                 np.delete(new_xmat, i)
                 np.delete(new_knowns, i)
 
@@ -761,8 +740,8 @@ def newtonRhapson(conv_crit, qlimType, filename):
 
 
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
-    yBusCutsemCalc(busnum, y_mini, lines, yBus)
+    piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
+    yBusCutsemCalc(y_mini, lines, yBus)
     #printMultiMat(busnum, yBus, False)
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
@@ -778,9 +757,9 @@ def newtonRhapson(conv_crit, qlimType, filename):
 
     for i in range(busnum):
         if np.isnan(p_list[i]):
-            p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
+            p_list[i] = calcP(i, yBus, busnum, t_list, v_list) # calcPVal(i, yBus, busnum, t_list, v_list)
         if np.isnan(q_list[i]):
-            q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+            q_list[i] = calcQ(i, yBus, busnum, t_list, v_list) # calcQVal(i, yBus, busnum, t_list, v_list)
     print('Final P and Q Values: ')
     for i in range(busnum):
         print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
@@ -797,8 +776,6 @@ def newtonRhapson(conv_crit, qlimType, filename):
         line=str(elem)      
         FromQflow, ToQflow, Qloss = CalcQflow(elem,v_list,t_list,yBus)  
         print("Q", int(line[0]), ": ", "{:.4f}".format(FromQflow), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(ToQflow), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Qloss))
-  
-    
 
 
 '''
@@ -830,8 +807,8 @@ def calcDCPF(filename):
 
     nameYbus(busnum, yBus)
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
-    yBusCutsemCalc(busnum, y_mini, lines, yBus)
+    piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
+    yBusCutsemCalc(y_mini, lines, yBus)
 
     #Remove slack bus from Ybus and neglect the real part. Remove j from imaginary part
     yBus_wo_slack=np.empty([len(yBus)-1, len(yBus)-1])
@@ -894,7 +871,7 @@ gets an string array with the bus types
 '''
 def loadbustype(filename):
     #read excel file
-    filename = 'c:/Users/PC/git_repos/PowerFlow/' + filename
+    #filename = 'c:/Users/PC/git_repos/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract bus type as string
     type_list = initial.loc[:, 'bus_type'].to_numpy()
@@ -921,7 +898,7 @@ def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list,
         type = knowns[i].name[0]
         net_injections[i].name = knowns[i].name
         if type == 'P':
-            net_injections[i].val = calcPVal(num, ybus, busnum, t_list, v_list)
+            net_injections[i].val = calcP(num, ybus, busnum, t_list, v_list)
             new_knowns[i].val = new_knowns[i].val - net_injections[i].val
             dP_V[cue] = new_knowns[i].val / v_list[num]
             cue =+ 1
@@ -944,7 +921,7 @@ def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list,
         num = int(knowns[i].name[1]) - 1
         type = knowns[i].name[0]
         if type == 'Q':
-            net_injections[i].val = calcQVal(num, ybus, busnum, t_list, v_list)
+            net_injections[i].val = calcQ(num, ybus, busnum, t_list, v_list)
             new_knowns[i].val = new_knowns[i].val - net_injections[i].val
             dQ_V[cue] = new_knowns[i].val / v_list[num]
             cue = + 1
@@ -984,13 +961,13 @@ def iterate_FDLF_endit(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t
         type = knowns[i].name[0]
         net_injections[i].name = knowns[i].name
         if type == 'P':
-            net_injections[i].val = calcPVal(num, ybus, busnum, t_list, v_list)
+            net_injections[i].val = calcP(num, ybus, busnum, t_list, v_list)
             new_knowns[i].val = new_knowns[i].val - net_injections[i].val
             dP_V[cueP] = new_knowns[i].val / v_list[num]
             cueP =+ 1
             corrections[i].name = 'T' + knowns[i].name[1]
         else:
-            net_injections[i].val = calcQVal(num, ybus, busnum, t_list, v_list)
+            net_injections[i].val = calcQ(num, ybus, busnum, t_list, v_list)
             new_knowns[i].val = new_knowns[i].val - net_injections[i].val
             dQ_V[cueQ] = new_knowns[i].val / v_list[num]
             cueQ = + 1
@@ -1046,8 +1023,8 @@ def FastDecoupled(conv_crit, filename):
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
     nameYbus(busnum, yBus)
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
-    yBusCutsemCalc(busnum, y_mini, lines, yBus)
+    piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
+    yBusCutsemCalc(y_mini, lines, yBus)
     print("YBus: ")
     printMultiMat(busnum, yBus, False)
 
@@ -1113,9 +1090,9 @@ def FastDecoupled(conv_crit, filename):
     # get other values of P and Q
     for i in range(busnum):
         if np.isnan(p_list[i]):
-            p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
+            p_list[i] = calcP(i, yBus, busnum, t_list, v_list)
         if np.isnan(q_list[i]):
-            q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+            q_list[i] = calcQ(i, yBus, busnum, t_list, v_list)
 
     print('Flow lines and Losses: ')
     print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
@@ -1162,17 +1139,17 @@ def decoupledLoadFlow(conv_crit, filename):
 
 
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
-    piLine(knownnum, r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
-    yBusCutsemCalc(busnum, y_mini, lines, yBus)
+    piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
+    yBusCutsemCalc(y_mini, lines, yBus)
 
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
     loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, 'DLF')
     for i in range(busnum):
         if np.isnan(p_list[i]):
-            p_list[i] = calcPVal(i, yBus, busnum, t_list, v_list)
+            p_list[i] = calcP(i, yBus, busnum, t_list, v_list)
         if np.isnan(q_list[i]):
-            q_list[i] = calcQVal(i, yBus, busnum, t_list, v_list)
+            q_list[i] = calcQ(i, yBus, busnum, t_list, v_list)
     print('Final P and Q Values: ')
     for i in range(busnum):
         print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))

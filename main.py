@@ -8,18 +8,18 @@ Newton Rhapson:
 '''
 
 def main():
+    #ex_nr_ex2.xlsx is the test system 2 for our group
     #change these for the NR methods for which type of qlmit method, which bus/es its on, and the limit value
-    conv_crit = 0.0000001
-    qlim_type = 'each' #none #end #change this to none to do regular NR wihtout qlims
-    filenameNR = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex2.xlsx'
+    conv_crit = 0.000001
+    qlim_type = 'none' #each #change this to none to do regular NR wihtout qlims
+    filenameNR = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx'
     newtonRhapson(conv_crit, qlim_type, filenameNR)
     filenameFDLF = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx'
     # FastDecoupled(conv_crit, filenameFDLF)
-    # FastDecoupled(conv_crit)
-    filenameDCPF = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx'
+    filenameDCPF = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex2.xlsx'
     # printDCPF(filenameDCPF)
-    filenameDLF = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx'
-    # decoupledLoadFlow(conv_crit, filenammeDLF)
+    filenameDLF = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex2.xlsx'
+    # decoupledLoadFlow(conv_crit, filenameDLF)
 
 
 
