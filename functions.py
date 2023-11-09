@@ -3,6 +3,7 @@ from classes import *
 import numpy as np
 import pandas as pd
 import math
+import cmath
 
 
 '''
@@ -394,6 +395,35 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
                 jacobian[i][j].val = dqidti(i_temp, v_list, ybus, t_list, busnum)
             elif jacobian[i][j].type == 'dqidtj':
                 jacobian[i][j].val = dqidtj(i_temp, j_temp, v_list, ybus, t_list)
+            elif jacobian[i][j].type == 'dqidvi':
+                jacobian[i][j].val = dqidvi(i_temp, v_list, ybus, t_list, busnum)
+            elif jacobian[i][j].type == 'dqidvj':
+                jacobian[i][j].val = dqidvj(i_temp, j_temp, v_list, ybus, t_list)
+            else:
+                print('error')
+
+'''
+Function: calculate jacobian elements and update matrix for DLF
+'''
+def calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum):
+    for i in range(knownnum):
+        for j in range(knownnum):
+            # Ps
+            # this i and j isnt from the loop. its from the value from P/Q and V/T
+            i_temp = int(jacobian[i][j].name[2])-1
+            j_temp = int(jacobian[i][j].name[5])-1
+            if jacobian[i][j].type == 'dpidti':
+                jacobian[i][j].val = dpidti(i_temp, v_list, ybus, t_list, busnum)
+            elif jacobian[i][j].type == 'dpidtj':
+                jacobian[i][j].val = dpidtj(i_temp, j_temp, v_list, ybus, t_list)
+            elif jacobian[i][j].type == 'dpidvi':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dpidvj':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dqidti':
+                jacobian[i][j].val = 0
+            elif jacobian[i][j].type == 'dqidtj':
+                jacobian[i][j].val = 0
             elif jacobian[i][j].type == 'dqidvi':
                 jacobian[i][j].val = dqidvi(i_temp, v_list, ybus, t_list, busnum)
             elif jacobian[i][j].type == 'dqidvj':
@@ -1068,7 +1098,6 @@ def FastDecoupled(conv_crit, filename):
         if np.isnan(p_list[i]):
             p_list[i] = calcP(i, yBus, busnum, t_list, v_list)
         if np.isnan(q_list[i]):
-            q_list[i] = calcQ(i, yBus, busnum, t_list, v_list)
             q_list[i] = calcQ(i, yBus, busnum, t_list, v_list)
     print("Ps")
     print(p_list)
