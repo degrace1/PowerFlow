@@ -254,6 +254,30 @@ def calcQVal(num, yBus, busnum, T, V):
             sum += V[j] * uij(yBus[num][j].val.real, yBus[num][j].val.imag, T[num], T[j])
     return q + (-V[num] * sum)
 
+'''
+Function: calculate P line flows From, To, losses
+'''
+def CalcPflow(line,v_list,t_list,yBus):
+    line=str(line)
+    i=int(line[0])-1
+    j=int(line[1])-1
+    FromPflow = np.abs(v_list[i]) * np.abs(v_list[j]) * tij(yBus[i][j].val.real, yBus[i][j].val.imag, t_list[i], t_list[j])
+    ToPflow = np.abs(v_list[j]) * np.abs(v_list[i]) * tij(yBus[j][i].val.real, yBus[j][i].val.imag, t_list[j], t_list[i])
+    Ploss = np.abs(np.abs(ToPflow) - np.abs(FromPflow))
+    return FromPflow, ToPflow, Ploss
+
+'''
+Function: calculate Q line flows From, To, losses
+'''
+def CalcQflow(line,v_list,t_list,yBus):
+    line=str(line)
+    i=int(line[0])-1
+    j=int(line[1])-1
+    FromQflow = np.abs(v_list[i]) * np.abs(v_list[j]) * uij(yBus[i][j].val.real, yBus[i][j].val.imag, t_list[i], t_list[j])
+    ToQflow = np.abs(v_list[j]) * np.abs(v_list[i]) * uij(yBus[j][i].val.real, yBus[j][i].val.imag, t_list[j], t_list[i])
+    Qloss = np.abs(np.abs(ToQflow) - np.abs(FromQflow))
+    return FromQflow, ToQflow, Qloss
+
 
 '''
 Function: calculate partial derivative dPi / dTi
@@ -761,15 +785,21 @@ def newtonRhapson(conv_crit, qlimType, filename):
     for i in range(busnum):
         print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
 
+
     print('Flow lines and Losses: ')
     print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
     for elem in lines:
-        line=str(elem)        
-        print("P", int(line[0]), ": ", "{:.4f}".format(p_list[int(line[0])-1]), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(p_list[int(line[1])-1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(p_list[int(line[0])-1]-p_list[int(line[1])-1]))
+        line=str(elem)      
+        FromPflow, ToPflow, Ploss = CalcPflow(elem,v_list,t_list,yBus)  
+        print("P", int(line[0]), ": ", "{:.4f}".format(FromPflow), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(ToPflow), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Ploss))
     print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
     for elem in lines:
-        line=str(elem)        
-        print("Q", int(line[0]), ": ", "{:.4f}".format(q_list[int(line[0])-1]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(q_list[int(line[1])-1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(q_list[int(line[0])-1]-q_list[int(line[1])-1]))
+        line=str(elem)      
+        FromQflow, ToQflow, Qloss = CalcQflow(elem,v_list,t_list,yBus)  
+        print("Q", int(line[0]), ": ", "{:.4f}".format(FromQflow), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(ToQflow), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Qloss))
+  
+    
+
 
 '''
 Function: Calculate DC Power Flow
