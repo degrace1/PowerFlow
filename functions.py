@@ -703,8 +703,8 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
         convergence = count == 0
         itno += 1
 
-def newtonRhapson(conv_crit, qlimType):
-    stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx')
+def newtonRhapson(conv_crit, qlimType, filename):
+    stuff = loadFile(filename)
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -774,8 +774,8 @@ def newtonRhapson(conv_crit, qlimType):
 '''
 Function: Calculate DC Power Flow
 '''
-def calcDCPF():
-    stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx')
+def calcDCPF(filename):
+    stuff = loadFile(filename)
     p_list = stuff[2]
     lines = stuff[4]
     r_list = stuff[5]
@@ -788,7 +788,7 @@ def calcDCPF():
     t_a = stuff[15]
 
     #Find slack_bus
-    filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx'
+
     #Remove row and column corresponding to slack bus
     ##check excel for bus_type and get index=slack_bus
     initial= pd.read_excel(filename, sheet_name='initial')
@@ -845,15 +845,15 @@ def calcDCPF():
 '''
 Function: Prints DC Power Flow
 '''
-def printDCPF():
+def printDCPF(filename):
     #Read the excel and save variables
-    stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx')
+    stuff = loadFile(filename)
     knownnum = stuff[9]
     busnum = stuff[10]
     knowns = [VarMat() for i in range(int(knownnum))]
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
 
-    DCPF=calcDCPF()
+    DCPF=calcDCPF(filename)
     print('Slack bus:', DCPF[0])
     print('Angles (º):', DCPF[1])
     print('Active Power flow through lines (pu):', DCPF[2])
@@ -988,9 +988,9 @@ def iterate_FDLF_endit(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t
 Function: FastDecoupled
 algorithm with the Fast Decoupled method
 '''
-def FastDecoupled(conv_crit):
+def FastDecoupled(conv_crit, filename):
     # Read the excel and save variables
-    stuff = loadFile('ex_nr_test2.xlsx')
+    stuff = loadFile(filename)
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -1022,7 +1022,7 @@ def FastDecoupled(conv_crit):
     printMultiMat(busnum, yBus, False)
 
     # Get slack and pv buses
-    type_list = loadbustype('ex_nr_test2.xlsx')
+    type_list = loadbustype(filename)
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
 
@@ -1100,8 +1100,8 @@ def FastDecoupled(conv_crit):
 
 
 
-def decoupledLoadFlow(conv_crit):
-    stuff = loadFile('ex_nr_test2.xlsx')
+def decoupledLoadFlow(conv_crit, filename):
+    stuff = loadFile(filename)
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
