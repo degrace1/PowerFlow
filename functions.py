@@ -227,29 +227,55 @@ def calcQ(i, yBus, busnum, T, V):
     for j in range(busnum):
         q += V[i]*V[j]*abs(yBus[i][j].val)*np.sin(T[i]-T[j]-cmath.phase(yBus[i][j].val))
     return q
+
+'''
+Function: calculate I in lines
+'''
+def lineCurrent(line,v_list,t_list,yBus):
+    line=str(line)
+    i=int(line[0])-1
+    j=int(line[1])-1
+    I = yBus[i][j].val*(cmath.rect(v_list[i], t_list[i])-cmath.rect(v_list[j], t_list[j]))
+    return I
+
+'''
+Function: calculate S in lines
+'''
+def CalcSline(line,v_list,t_list,yBus,I):
+    line=str(line)
+    i=int(line[0])-1
+    j=int(line[1])-1
+    FromS = cmath.rect(v_list[i], t_list[i])*complex(I.real,-I.imag)
+    ToS = cmath.rect(v_list[j], t_list[j])*complex(I.real,-I.imag)
+    return FromS,ToS
+
 '''
 Function: calculate P line flows From, To, losses
 '''
-def CalcPflow(line,v_list,t_list,yBus):
-    line=str(line)
-    i=int(line[0])-1
-    j=int(line[1])-1
-    FromPflow = v_list[i] * v_list[j] * abs(yBus[i][j].val)*np.cos(t_list[i]-t_list[j]-cmath.phase(yBus[i][j].val))
-    ToPflow = v_list[j] * v_list[i] * abs(yBus[j][i].val)*np.cos(t_list[j]-t_list[i]-cmath.phase(yBus[j][i].val)) #tij(yBus[j][i].val.real, yBus[j][i].val.imag, t_list[j], t_list[i])
-    Ploss = np.abs(np.abs(ToPflow) - np.abs(FromPflow))
-    return FromPflow, ToPflow, Ploss
+def CalcPflow(line,v_list,t_list,yBus,I,FromS,ToS):
+    FromP = FromS.real
+    ToP = ToS.real
+    Ploss = np.abs(ToP) - np.abs(FromP)
+    return  FromP , ToP, Ploss
+'''
+Function: calculate P line flows From, To, losses
+'''
+def CalcQflow(line,v_list,t_list,yBus,I,FromS,ToS):
+    FromQ = FromS.imag
+    ToQ= ToS.imag
+    Qloss = np.abs(ToQ) - np.abs(FromQ)
+    return  FromQ , ToQ, Qloss
 
 '''
-Function: calculate Q line flows From, To, losses
+Function: calculate I line flows From, To, losses
 '''
-def CalcQflow(line,v_list,t_list,yBus):
-    line=str(line)
+def CalcIflow(line,v_list,t_list,yBus,I,FromS,ToS):
+    elem=str(line)
     i=int(line[0])-1
     j=int(line[1])-1
-    FromQflow = v_list[i] * v_list[j] * abs(yBus[i][j].val)*np.sin(t_list[i]-t_list[j]-cmath.phase(yBus[i][j].val)) #uij(yBus[i][j].val.real, yBus[i][j].val.imag, t_list[i], t_list[j])
-    ToQflow = v_list[j] * v_list[i] * abs(yBus[j][i].val)*np.sin(t_list[j]-t_list[i]-cmath.phase(yBus[j][i].val)) #uij(yBus[j][i].val.real, yBus[j][i].val.imag, t_list[j], t_list[i])
-    Qloss = np.abs(np.abs(ToQflow) - np.abs(FromQflow))
-    return FromQflow, ToQflow, Qloss
+    FromI = cmath.sqrt(np.abs(FromS/yBus[i][j].val))
+    ToI= cmath.sqrt(np.abs(ToS/yBus[j][i].val))
+    return  FromI, ToI
 
 
 '''
@@ -764,19 +790,20 @@ def newtonRhapson(conv_crit, qlimType, filename):
     for i in range(busnum):
         print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
 
-
     print('Flow lines and Losses: ')
     print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
-    for elem in lines:
-        line=str(elem)
-        FromPflow, ToPflow, Ploss = CalcPflow(elem,v_list,t_list,yBus)
-        print("P", int(line[0]), ": ", "{:.4f}".format(FromPflow), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(ToPflow), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Ploss))
+    for i in range(len(lines)):
+        line=str(lines[i])      
+        print("P", int(line[0]), ": ", "{:.4f}".format(Pflow[i][0]), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(Pflow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Pflow[i][2]))
     print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
-    for elem in lines:
-        line=str(elem)
-        FromQflow, ToQflow, Qloss = CalcQflow(elem,v_list,t_list,yBus)
-        print("Q", int(line[0]), ": ", "{:.4f}".format(FromQflow), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(ToQflow), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Qloss))
-
+    for i in range(len(lines)):
+        line=str(lines[i])      
+        print("Q", int(line[0]), ": ", "{:.4f}".format(Qflow[i][0]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(Qflow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Qflow[i][2]))
+    print('Apparent Powers and Currents in lines: ')
+    print('S From Bus injection: ', "\t\t",'I From Bus injection: ', "\t\t",'S To Bus injection: ', "\t\t",'I To Bus injection: ')
+    for i in range(len(lines)):
+        line=str(lines[i])      
+        print("S", int(line[0]), ": ", "{:.4f}".format(Sline[i][0]), "\t\t\t", "I", int(line[0]),int(line[1]), ": ", "{:.4f}".format(Iline[i][0]), "\t\t\t", "S", int(line[1]), ": ", "{:.4f}".format(Sline[i][1]), "\t\t\t", "I", int(line[1]),int(line[0]), ": ", "{:.4f}".format(Iline[i][1]))
 
 '''
 Function: Calculate DC Power Flow
