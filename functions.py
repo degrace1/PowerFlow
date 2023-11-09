@@ -146,14 +146,12 @@ def printMultiMat(num, mat, jac):
 
 
 """
-Function: get zy bus
+Function: name Y bus
 This will set the names of the Ybus matrix things.
 
 Parameters:
     busnum - number of nuses for matrix size indeces
     yBus - matrix with yBus names and vals
-
-
 """
 
 def nameYbus(busnum, yBus):
@@ -524,43 +522,6 @@ def loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, 
                 count += 1
         convergence = count == 0
 
-def addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat,ybus, t_list, v_list,
-                         busnum, qval, qnum, vval):
-    knownindex = 0
-    breakbool = True
-    temp_index=0
-    while breakbool:
-        if temp_index == knownnum:
-            knownindex = temp_index
-            breakbool = False
-        else:
-            if knowns[temp_index].name[0] == 'Q':
-                if int(knowns[temp_index].name[1]) > qnum:
-                    knownindex = temp_index
-                    breakbool = False
-        temp_index+=1
-
-    for i in range(knownnum+1):
-        if i < knownindex:
-            new_knowns[i].val = knowns[i].val
-            new_xmat[i].val = xmat[i].val
-            new_knowns[i].name = knowns[i].name
-            new_xmat[i].name = xmat[i].name
-        elif i == knownindex:
-            new_knowns[i].val = qval
-            new_knowns[i].name = 'Q' + str(qnum)
-            new_xmat[i].val = vval
-            new_xmat[i].name = 'V' + str(qnum)
-            knownindex = i
-        else:
-            new_knowns[i + 1].val = knowns[i].val
-            new_knowns[i + 1].name = knowns[i].name
-            new_xmat[i + 1].val = xmat[i].val
-            new_xmat[i + 1].name = xmat[i].name
-
-
-    nameJacElem(knownnum+1, new_knowns, new_xmat, new_jacobian)
-    return knownindex
 
 '''
 Function: NR iterate loop with Q limits
@@ -742,110 +703,6 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
         convergence = count == 0
         itno += 1
 
-
-
-
-
-
-
-
-def NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list,
-                      qbus, qlim_val):
-    convergence = False
-    itno = 0
-    while not (convergence or itno > 10):
-        itno += 1
-        num_lims = len(qbus)
-        print("\n\nIteration #" + str(itno))
-        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, qbus, num_lims, 'NR')
-        corrections = outputs[0]
-        qlim = outputs[1]
-
-        # Reactive power limits
-        # First change matrix size
-        # this is only if one more than knownnum
-        new_knowns = [VarMat() for i in range(int(knownnum + 1))]
-        new_xmat = [VarMat() for j in range(int(knownnum + 1))]
-        new_jacobian = [[JacElem() for i in range(int(knownnum+1))] for j in range(int(knownnum+1))]
-
-
-        v_orig = [1 for i in range(busnum)] #original set magnitude of voltage
-        #for i in range(busnum):
-        #    v_orig[i] = v_list[i]
-        q_limit_val = 0
-        #one by one option:
-
-        limitbool = False
-        knownindex = 0
-        if qlim[0] >= qlim_val:
-            knownindex = addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat, yBus, t_list,
-                                     v_list, busnum, qlim_val, qbus[0], 1)
-            limitbool = True
-            printMultiMat(knownnum + 1, new_jacobian, True)
-            q_limit_val = qlim_val
-        elif qlim[0] <= -qlim_val:
-            knownindex = addToMismatchVectors(new_knowns, new_xmat, new_jacobian, knownnum, knowns, xmat, yBus, t_list,
-                                 v_list, busnum, -qlim_val, qbus[0], 1)
-            printMultiMat(knownnum+1, new_jacobian, True)
-            limitbool = True
-            q_limit_val = -qlim_val
-
-        while limitbool:
-            check_q = iterate(knownnum+1, new_jacobian, yBus, t_list, v_list, new_knowns, new_xmat, busnum, qbus,
-                              num_lims, 'NR')
-            corrections = check_q[0]
-            qlim = check_q[1]
-
-            if q_limit_val < 0:
-            # fixed at lower limit
-            #while v_list[qbus[0] - 1] >= v_orig[qbus[0] - 1] or knowns[knownindex].val >= qlim_val or knowns[knownindex].val <= -qlim_val:
-                if v_list[qbus[0] - 1] >= v_orig[qbus[0] - 1]:
-                    # leave as pq bus, iterate
-                    new_knowns[knownindex].val = -qlim_val
-                else:
-                    if qlim[0] >= qlim_val:
-                        new_knowns[knownindex].val = qlim_val
-                        q_limit_val = qlim_val
-                    elif qlim[0] <= -qlim_val:
-                        new_knowns[knownindex].val = -qlim_val
-                        q_limit_val = -qlim_val
-                    else:
-                        limitbool = False
-                        print('done with type switch')
-            else:
-            # fixed at upper limit
-                if v_list[qbus[0] - 1] <= v_orig[qbus[0] - 1]:
-                    # leave as pq bus, iterate
-                    new_knowns[knownindex].val = qlim_val
-                else:
-                    if qlim[0] >= qlim_val:
-                        new_knowns[knownindex].val = qlim_val
-                        q_limit_val = qlim_val
-                    elif qlim[0] <= -qlim_val:
-                        new_knowns[knownindex].val = -qlim_val
-                        q_limit_val = -qlim_val
-                    else:
-                        print('done with type switch')
-                        limitbool = False
-
-        print("switching back to pv bus")
-        v_list[qbus[0] - 1] = v_orig[qbus[0] - 1]
-        for i in range(knownnum):
-            #fixme: copy the values from the new xmatrix to the old
-            xmat[i]
-            xmat[knownindex].val = v_orig[qbus[0] - 1]
-
-        # Check corrections matrix for convergence
-        count = 0
-        for i in range(corrections.size):
-            if abs(corrections[i]) > conv_crit:
-                cur = abs(corrections[i])
-                count += 1
-        convergence = count == 0
-
-def NR_loop_qlim_end():
-    print('still to do')
-
 def newtonRhapson(conv_crit, qlimType):
     stuff = loadFile('/Users/gracedepietro/Desktop/4205/project/PowerFlow/ex_nr_ex1.xlsx')
     v_list = stuff[0]
@@ -887,15 +744,7 @@ def newtonRhapson(conv_crit, qlimType):
     nameJacElem(knownnum, knowns, xmat, jacobian)
     if qlimType == 'none':
         loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, 'NR')
-
-    elif qlimType == 'end':
-        NR_loop_qlim_end()
     elif qlimType == 'each':
-        #qbus is array or 1 value of the bus number q
-        #num_lims is how many buses have q limits
-        #qlim_val is the limit value
-        #NR_loop_qlim_each(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list,
-        #              qbus, qlim_val)
         num_p = numT
         NR_iterate_loop_qlim(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, q_lim,
                              num_p)
