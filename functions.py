@@ -273,8 +273,8 @@ def CalcIflow(line,v_list,t_list,yBus,I,FromS,ToS):
     elem=str(line)
     i=int(line[0])-1
     j=int(line[1])-1
-    FromI = cmath.sqrt(np.abs(FromS/yBus[i][j].val))
-    ToI= cmath.sqrt(np.abs(ToS/yBus[j][i].val))
+    FromI = cmath.sqrt(np.abs(FromS*yBus[i][j].val))
+    ToI= cmath.sqrt(np.abs(ToS*yBus[j][i].val))
     return  FromI, ToI
 
 
