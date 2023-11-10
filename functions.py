@@ -915,7 +915,6 @@ gets an string array with the bus types
 '''
 def loadbustype(filename):
     #read excel file
-    #filename = 'c:/Users/PC/git_repos/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract bus type as string
     type_list = initial.loc[:, 'bus_type'].to_numpy()
@@ -1059,7 +1058,7 @@ def FastDecoupled(conv_crit, filename):
     t_x = stuff[14]
     t_a = stuff[15]
     # Get slack and pv buses
-    type_list = loadbustype('ex_nr_ex1.xlsx')
+    type_list = loadbustype(filename)
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
 
