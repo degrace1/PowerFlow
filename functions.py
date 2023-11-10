@@ -831,8 +831,8 @@ def newtonRhapson(conv_crit, qlimType, filename):
 '''
 Function: Calculate DC Power Flow
 '''
-def calcDCPF(filename):
-    stuff = loadFile(filename)
+def calcDCPF(filenameDCPF):
+    stuff = loadFile(filenameDCPF)
     p_list = stuff[2]
     lines = stuff[4]
     r_list = stuff[5]
@@ -848,7 +848,7 @@ def calcDCPF(filename):
 
     #Remove row and column corresponding to slack bus
     ##check excel for bus_type and get index=slack_bus
-    initial= pd.read_excel(filename, sheet_name='initial')
+    initial= pd.read_excel(filenameDCPF, sheet_name='initial')
     bus_type=initial.loc[:,'bus_type']
     slack_bus=np.where(bus_type=='slack')[0][0]
 
@@ -878,8 +878,8 @@ def calcDCPF(filename):
     yBusDC=-1*yBus_wo_slack
 
     p_without_slack = np.delete(p_list, slack_bus, axis=0)#delete slack bus
-    inv_yBusDC=np.linalg.inv(yBusDC)
-    xmat = np.dot(inv_yBusDC, p_without_slack)  #Angles
+    p_without_slack[np.isnan(p_without_slack)] = 0
+    xmat=np.linalg.solve(yBusDC,p_without_slack)
     new_col = np.array([[0]])
     xmat_final = np.insert(xmat, slack_bus, new_col, axis=0)
 
@@ -897,20 +897,20 @@ def calcDCPF(filename):
         except (ValueError, IndexError):
             PlineDC.append(None)
 
-    return slack_bus, xmat_final, PlineDC
+    return slack_bus+1, xmat_final, PlineDC
 
 '''
 Function: Prints DC Power Flow
 '''
-def printDCPF(filename):
+def printDCPF(filenameDCPF):
     #Read the excel and save variables
-    stuff = loadFile(filename)
+    stuff = loadFile(filenameDCPF)
     knownnum = stuff[9]
     busnum = stuff[10]
     knowns = [VarMat() for i in range(int(knownnum))]
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
 
-    DCPF=calcDCPF(filename)
+    DCPF=calcDCPF(filenameDCPF)
     print('Slack bus:', DCPF[0])
     print('Angles (º):', DCPF[1])
     print('Active Power flow through lines (pu):', DCPF[2])
@@ -919,9 +919,9 @@ def printDCPF(filename):
 Function: loadbustype
 gets an string array with the bus types
 '''
-def loadbustype(filename):
+def loadbustype(filenameFDLF):
     #read excel file
-    initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
+    initial = pd.read_excel(filenameFDLF, sheet_name='initial', index_col='bus_num')
     #extract bus type as string
     type_list = initial.loc[:, 'bus_type'].to_numpy()
     type_list = np.array(type_list)
@@ -1044,9 +1044,9 @@ def iterate_FDLF_endit(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t
 Function: FastDecoupled
 algorithm with the Fast Decoupled method
 '''
-def FastDecoupled(conv_crit, filename):
+def FastDecoupled(conv_crit, filenameFDLF):
     # Read the excel and save variables
-    stuff = loadFile(filename)
+    stuff = loadFile(filenameFDLF)
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -1064,7 +1064,7 @@ def FastDecoupled(conv_crit, filename):
     t_x = stuff[14]
     t_a = stuff[15]
     # Get slack and pv buses
-    type_list = loadbustype(filename)
+    type_list = loadbustype(filenameFDLF)
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
 
@@ -1083,7 +1083,7 @@ def FastDecoupled(conv_crit, filename):
     printMultiMat(busnum, yBus, False)
 
     # Get slack and pv buses
-    type_list = loadbustype(filename)
+    type_list = loadbustype(filenameFDLF)
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
 
@@ -1197,8 +1197,8 @@ def FastDecoupled(conv_crit, filename):
 Function: decoupledLoadFlow
 algorithm with the Decoupled Load Flow method
 '''
-def decoupledLoadFlow(conv_crit, filename):
-    stuff = loadFile(filename)
+def decoupledLoadFlow(conv_crit, filenameDLF):
+    stuff = loadFile(filenameDLF)
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
