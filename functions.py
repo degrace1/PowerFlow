@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import math
 import cmath
+import time
 
 
 '''
@@ -252,7 +253,7 @@ def calcSLine(line,v_list,t_list,current):
 '''
 Function: calculate P line flows From, To, losses
 '''
-def calcPFlow(line,v_list,t_list,yBus,I,fromS,toS):
+def calcPFlow(fromS,toS):
     fromP = fromS.real
     toP = toS.real
     pLoss = np.abs(np.abs(toP) - np.abs(fromP))
@@ -260,7 +261,7 @@ def calcPFlow(line,v_list,t_list,yBus,I,fromS,toS):
 '''
 Function: calculate P line flows From, To, losses
 '''
-def calcqFlow(line,v_list,t_list,yBus,I,fromS,toS):
+def calcqFlow(fromS,toS):
     fromQ = fromS.imag
     toQ= toS.imag
     qLoss = np.abs(np.abs(toQ) - np.abs(fromQ))
@@ -269,7 +270,7 @@ def calcqFlow(line,v_list,t_list,yBus,I,fromS,toS):
 '''
 Function: calculate I line flows From, To, losses
 '''
-def calcIFlow(line,v_list,t_list,yBus,I,fromS,toS):
+def calcIFlow(line,yBus,fromS,toS):
     elem=str(line)
     i=int(line[0])-1
     j=int(line[1])-1
@@ -290,8 +291,8 @@ def printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines):
     for i in range(busnum):
         print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
 
-    Iline = []
-    Sline = []
+    iLine = []
+    sLine = []
     pFlow = []
     qFlow = []
     totalPLosses=0
@@ -299,16 +300,16 @@ def printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines):
     for elem in lines:
         line=str(elem)
         current = lineCurrent(line,v_list,t_list,yBus)
-        S = calcSLine(line,v_list,t_list,yBus,current)
-        Sline.append([np.abs(S[0]),np.abs(S[1])])
-        P = calcPFlow(line,v_list,t_list,yBus,current,S[0],S[1])
+        S = calcSLine(line,v_list,t_list,current)
+        sLine.append([np.abs(S[0]),np.abs(S[1])])
+        P = calcPFlow(S[0],S[1])
         totalPLosses+=P[2]
         pFlow.append([P[0],P[1],P[2]])
-        Q = calcqFlow(line,v_list,t_list,yBus,current,S[0],S[1])
+        Q = calcqFlow(S[0],S[1])
         totalQLosses+=Q[2]
         qFlow.append([Q[0],Q[1],Q[2]])
-        I = calcIFlow(line,v_list,t_list,yBus,current,S[0],S[1])
-        Iline.append([np.abs(I[0]),np.abs(I[1])])
+        i_current = calcIFlow(line,yBus,S[0],S[1])
+        iLine.append([np.abs(i_current[0]),np.abs(i_current[1])])
 
 
     print('Flow lines and Losses: ')
@@ -326,7 +327,7 @@ def printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines):
     print('S From Bus injection: ', "\t\t",'I From Bus injection: ', "\t\t",'S To Bus injection: ', "\t\t",'I To Bus injection: ')
     for i in range(len(lines)):
         line=str(lines[i])
-        print("S", int(line[0]), ": ", "{:.4f}".format(Sline[i][0]), "\t\t\t", "I", int(line[0]),int(line[1]), ": ", "{:.4f}".format(Iline[i][0]), "\t\t\t", "S", int(line[1]), ": ", "{:.4f}".format(Sline[i][1]), "\t\t\t", "I", int(line[1]),int(line[0]), ": ", "{:.4f}".format(Iline[i][1]))
+        print("S", int(line[0]), ": ", "{:.4f}".format(sLine[i][0]), "\t\t\t", "I", int(line[0]),int(line[1]), ": ", "{:.4f}".format(iLine[i][0]), "\t\t\t", "S", int(line[1]), ": ", "{:.4f}".format(sLine[i][1]), "\t\t\t", "I", int(line[1]),int(line[0]), ": ", "{:.4f}".format(iLine[i][1]))
 
 '''
 Function: calculate partial derivative dPi / dTi
@@ -783,6 +784,7 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
         itno += 1
 
 def newtonRhapson(conv_crit, qlimType, filename):
+    startNRTime = time.time()
     stuff = loadFile(filename)
     v_list = stuff[0]
     t_list = stuff[1]
@@ -831,7 +833,8 @@ def newtonRhapson(conv_crit, qlimType, filename):
         print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
 
     printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines)
-
+    endTimeNR = time.time()
+    print("Final running time for Newton-Raphson method is: ", endTimeNR-startNRTime, "seconds")
 '''
 Function: Calculate DC Power Flow
 '''
@@ -907,6 +910,7 @@ def calcDCPF(filenameDCPF):
 Function: Prints DC Power Flow
 '''
 def printDCPF(filenameDCPF):
+    startTimeDC = time.time()
     #Read the excel and save variables
     stuff = loadFile(filenameDCPF)
     knownnum = stuff[9]
@@ -918,6 +922,8 @@ def printDCPF(filenameDCPF):
     print('Slack bus:', DCPF[0])
     print('Angles (º):', DCPF[1])
     print('Active Power flow through lines (pu):', DCPF[2])
+    endTimeDC = time.time()
+    print("Final running time for DC method is: ", endTimeDC - startTimeDC, "seconds")
 
 '''
 Function: loadbustype
@@ -1154,6 +1160,7 @@ Function: decoupledLoadFlow
 algorithm with the Decoupled Load Flow method
 '''
 def decoupledLoadFlow(conv_crit, filenameDLF):
+    startTimeDecoup = time.time()
     stuff = loadFile(filenameDLF)
     v_list = stuff[0]
     t_list = stuff[1]
@@ -1193,3 +1200,5 @@ def decoupledLoadFlow(conv_crit, filenameDLF):
     loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, 'DLF')
 
     printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines)
+    endTimeDecoup = time.time()
+    print("Final running time for Decoupled method is: ", endTimeDecoup-startTimeDecoup, "seconds")
