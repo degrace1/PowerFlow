@@ -835,6 +835,14 @@ def newtonRhapson(conv_crit, qlimType, filename):
     print("Final running time for Newton-Raphson method is: ", endTimeNR-startNRTime, "seconds")
 '''
 Function: Calculate DC Power Flow
+This function finds what the slack bus number is and gets the Ybus_DC. Then it calculates the DC load flow angles
+and the line flows.
+Parameters:
+    filenameDCPF - type(str), test system excel document
+Returns:
+    slack_bus+1 - type(int), which bus is the slack bus
+    xmat_final - type(ndarray), matrix with solution angles at each 
+    PlineDC - type(list), line power flows
 '''
 def calcDCPF(filenameDCPF):
     stuff = loadFile(filenameDCPF)
@@ -906,6 +914,9 @@ def calcDCPF(filenameDCPF):
 
 '''
 Function: Prints DC Power Flow
+This function prints the results of calcDCPF and calculates the running time.
+Parameters:
+    filenameDCPF - type(str), test system excel document
 '''
 def printDCPF(filenameDCPF):
     startTimeDC = time.time()
@@ -1078,8 +1089,8 @@ def loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_
 Function: FastDecoupled
 algorithm with the Fast Decoupled method
 '''
-def fastDLF(conv_crit, qlimType, filename):
-    stuff = loadFile(filename)
+def fastDLF(conv_crit, qlimType, filenameFDLF):
+    stuff = loadFile(filenameFDLF)
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -1110,7 +1121,7 @@ def fastDLF(conv_crit, qlimType, filename):
     #printMultiMat(busnum, yBus, False)
 
     # Get slack and pv buses
-    type_list = loadbustype(filename)
+    type_list = loadbustype(filenameFDLF)
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
     notype = np.where(type_list == 'nan')[0]
