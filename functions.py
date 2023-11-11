@@ -136,10 +136,8 @@ def printMultiMat(num, mat, jac):
     for i in range(int(num)):
         for j in range(int(num)):
             if jac == False:
-                #print(mat[i][j].name + ", " + str(mat[i][j].val))
                 str_print[i] += mat[i][j].name + ": " + str(mat[i][j].val)
             else:
-                #print(mat[i][j].name + ", " + str(mat[i][j].val) + ", " + str(mat[i][j].type))
                 str_print[i] += mat[i][j].name + ": " + str(mat[i][j].val)
             if j != int(num):
                 str_print[i] += ', '
@@ -640,58 +638,56 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
             P[i] = calcP(i, yBus, busnum, t_list, v_list)
             Q[i] = calcQ(i, yBus, busnum, t_list, v_list)
 
-        #i_qlim_lower = []
-        #i_qlim_upper = []
-        # check the new Q values and add their indices to a list
+        # check the new Q values and add their indices to a list if the limit is violated
         # set the q_list values to the lower or upper limit
         count_lims_reached = 0
         for i in range(len(q_list)):
             if (i not in i_qlim_lower and i not in i_qlim_upper):
-                bool2 = not np.isnan(q_lim[i]) and Q[i] > q_lim[i]
                 if not np.isnan(q_lim[i]) and Q[i] < -q_lim[i]:
                     q_list[i] = -q_lim[i]
                     i_qlim_lower.append(i)
                     count_lims_reached+=1
+                    knownnum += 1
                 elif not np.isnan(q_lim[i]) and Q[i] > q_lim[i]:
                     q_list[i] = q_lim[i]
                     i_qlim_upper.append(i)
                     count_lims_reached+=1
+                    knownnum += 1
 
         #only add on to matricess if the count is greater than zero
         if count_lims_reached > 0:
+            print("Q limit reached, switching to PQ bus: ")
             for i in i_qlim_lower:
                 known_cur1 = VarMat('Q' + str(i+1), q_list[i])
                 new_knowns.insert(i+num_p, known_cur1)
                 xmat_cur1 = VarMat('V'+str(i+1), 1)
                 new_xmat.insert(i+num_p, xmat_cur1)
-                #new_xmat[i+num+p].name = 'V' + str(i_qlim_lower+1)
-                #new_xmat[i].val = 1
+
             for i in i_qlim_upper:
                 known_cur1 = VarMat('Q' + str(i + 1), q_list[i])
                 new_knowns.insert(i + num_p, known_cur1)
                 #strcur = 'V' + str(i+1)
                 xmat_cur2 = VarMat('V' + str(i + 1), 1)
                 new_xmat.insert(i + num_p, xmat_cur2)
-                #new_xmat[i].name = 'V' + str(i_qlim_upper+1)
-                #new_xmat[i].val = 1
+
 
         #establish jacobian matrix
-        new_jacobian = [[JacElem() for i in range(int(knownnum+count_lims_reached))] for j in range(int(knownnum+count_lims_reached))]
-        nameJacElem(knownnum+count_lims_reached, new_knowns, new_xmat, new_jacobian)
-        calcJacElems(knownnum+count_lims_reached, new_jacobian, yBus, t_list, v_list, busnum)
+        new_jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
+        nameJacElem(knownnum, new_knowns, new_xmat, new_jacobian)
+        calcJacElems(knownnum, new_jacobian, yBus, t_list, v_list, busnum)
 
         #create temp jac without the object and just numbers
-        temp_jac = [[0 for i in range(int(knownnum+count_lims_reached))] for j in range(int(knownnum+count_lims_reached))]
+        temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
         #create temp knowns without the object and just numbers
-        temp_knowns = np.zeros(knownnum+count_lims_reached)
-        for i in range(knownnum+count_lims_reached):
+        temp_knowns = np.zeros(knownnum)
+        for i in range(knownnum):
             temp_knowns[i] = new_knowns[i].val
-            for j in range(knownnum+count_lims_reached):
+            for j in range(knownnum):
                 temp_jac[i][j] = new_jacobian[i][j].val
 
-        net_injections = np.zeros(knownnum+count_lims_reached)
+        net_injections = np.zeros(knownnum)
 
-        for i in range(knownnum+count_lims_reached):
+        for i in range(knownnum):
             # for each known value, calculate the new value of P or Q and subtract them
             num = int(new_knowns[i].name[1]) - 1
             type = new_knowns[i].name[0]
@@ -707,12 +703,13 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
                 temp_knowns[i] = temp_knowns[i] - new_q
 
         print("Net Injections: ")
-        for i in range(knownnum+count_lims_reached):
+        for i in range(knownnum):
             print(new_knowns[i].name, ': ', net_injections[i])
 
         #solve the linear algebra
         corrections = np.linalg.solve(temp_jac, temp_knowns)
-        for j in range(knownnum+count_lims_reached):
+        #update the magnitudes and angles
+        for j in range(knownnum):
             new_xmat[j].val += corrections[j]
             temp_num = int(new_xmat[j].name[1])
             temp_val = new_xmat[j].val
@@ -724,7 +721,7 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
                 print("error thrown in updating v and t lists")
 
         #one loop is done, now we check to see if the reactive power limits are still violated
-
+        #check the upper limit violations
         for i in i_qlim_upper:
             if v_list[i] <= v_orig[i]:
                 q_list[i] = q_lim[i]
@@ -739,12 +736,13 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
                 # delete from upper list
                 i_qlim_upper = [x for x in i_qlim_upper if x != i_del]
                 # set q back to nan
-                q_list[i] = [np.nan]
+                q_list[i] = np.nan
                 # delete from the xmatrix and mismatch
                 np.delete(new_xmat, i)
                 np.delete(new_knowns, i)
+                knownnum -= 1
 
-
+        #check the lower limit violations
         for i in i_qlim_lower:
             if v_list[i] >= v_orig[i]:
                 q_list[i] = -q_lim[i]
@@ -759,10 +757,11 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
                 # delete from lower list
                 i_qlim_lower = [x for x in i_qlim_lower if x != i_del]
                 # set q back to nan
-                q_list[i] = [np.nan]
+                q_list[i] = np.nan
                 # delete from xmatrix and mismatch
                 np.delete(new_xmat, i)
                 np.delete(new_knowns, i)
+                knownnum -= 1
 
         print("Corrections Vector (dV, dT): ")
         print(corrections)
@@ -783,6 +782,7 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
         itno += 1
 
 def newtonRhapson(conv_crit, qlimType, filename):
+    startNRTime = time.time()
     stuff = loadFile(filename)
     v_list = stuff[0]
     t_list = stuff[1]
@@ -833,6 +833,7 @@ def newtonRhapson(conv_crit, qlimType, filename):
     printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines)
     endTimeNR = time.time()
     print("Final running time for Newton-Raphson method is: ", endTimeNR-startNRTime, "seconds")
+
 '''
 Function: Calculate DC Power Flow
 '''
@@ -925,7 +926,7 @@ def printDCPF(filenameDCPF):
 
 '''
 Function: loadbustype
-gets an string array with the bus types
+gets a string array with the bus types
 '''
 def loadbustype(filenameFDLF):
     #read excel file
@@ -938,15 +939,17 @@ def loadbustype(filenameFDLF):
 
 '''
 Function: iterate FDLF
+performs one iteration of fast decoupled load flow
 '''
-def iterate_FDLF(knownnum, ybus, t_list, v_list, knowns, xmat, busnum, qnum, num_lims, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it='end_it'):
+def iterate_FDLF(knownnum, ybus, t_list, v_list, knowns, xmat, busnum, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it, pvBusNo):
     #make temp knowns matrix without the names
     new_knowns = [0 for i in range(knownnum)]
     net_injections = [0 for i in range(knownnum)]
     for i in range(knownnum):
         new_knowns[i] = knowns[i].val
     dP_V = [0 for i in range(busnum - len(slackbus) - len(notype))]
-    dQ_V = [0 for i in range(busnum - len(slackbus) - len(pvbus) - len(notype))]
+    lenPVbus = len(pvbus) - pvBusNo
+    dQ_V = [0 for i in range(busnum - len(slackbus) - lenPVbus - len(notype))]
     corrections = [0 for i in range(knownnum)]
     cueP = 0
     cueQ = 0
@@ -1041,12 +1044,7 @@ def iterate_FDLF(knownnum, ybus, t_list, v_list, knowns, xmat, busnum, qnum, num
     print("Net Injections: ")
     for i in range(knownnum):
         print(knowns[i].name, ': ', net_injections[i])
-    if num_lims>=1:
-        q_limit = [0 for i in range(num_lims)]
-        for i in range(num_lims):
-            q_limit[i] = calcQ(qnum[i]-1, ybus, busnum, t_list, v_list)
-    else:
-        q_limit = 0
+
     print("Corrections Vector (dV, dT): ")
     print(corrections)
     print("RHS Vector (dP, dQ): ")
@@ -1055,16 +1053,119 @@ def iterate_FDLF(knownnum, ybus, t_list, v_list, knowns, xmat, busnum, qnum, num
     for i in range(busnum):
         print("|V|", i + 1, ": ", "{:.4f}".format(v_list[i]), "\t\t", "Theta", i + 1, ": ",
               "{:.4f}".format(t_list[i] * 180 / math.pi))
-    return corrections, q_limit
+    return corrections
 
-def loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it):
+def iterate_fdlf_qlim(conv_crit, busnum, knownnum, slackbus, pvbus, notype, knowns, xmat, yBus, t_list, v_list, q_list, q_lim, num_p, type_it):
+    i_qlim_upper=[]
+    i_qlim_lower=[]
+
+    #copy original v values to remember them
+    v_orig = [1 for i in range(busnum)]  # original set magnitude of voltage
+    for i in range(busnum):
+        v_orig[i] = v_list[i]
+
+    new_xmat = [VarMat() for i in range(int(knownnum))]
+    new_knowns = [VarMat() for i in range(int(knownnum))]
+    for i in range(knownnum):
+        new_xmat[i].name = xmat[i].name
+        new_xmat[i].val = xmat[i].val
+        new_knowns[i].name = knowns[i].name
+        new_knowns[i].val = knowns[i].val
+
     convergence = False
     itno = 0
     while not (convergence or itno > 10):
         itno += 1
         print("\n\nIteration #" + str(itno))
-        outputs = iterate_FDLF(knownnum, yBus, t_list, v_list, knowns, xmat, busnum, 0, 0, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it)
-        corrections = outputs[0]
+
+    # when we add a Q to the knowns, there will be one less PV bus to remove from bpp and dQ_V
+
+        # CaLlculate new P and Q values
+        P = np.zeros(busnum)
+        Q = np.zeros(busnum)
+        for i in range(busnum):
+            P[i] = calcP(i, yBus, busnum, t_list, v_list)
+            Q[i] = calcQ(i, yBus, busnum, t_list, v_list)
+
+        count_lims_reached = 0
+        for i in range(len(q_list)):
+            if (i not in i_qlim_lower and i not in i_qlim_upper):
+                if not np.isnan(q_lim[i]) and Q[i] < -q_lim[i]:
+                    q_list[i] = -q_lim[i]
+                    i_qlim_lower.append(i)
+                    count_lims_reached += 1
+                    knownnum += 1
+                elif not np.isnan(q_lim[i]) and Q[i] > q_lim[i]:
+                    q_list[i] = q_lim[i]
+                    i_qlim_upper.append(i)
+                    count_lims_reached += 1
+                    knownnum += 1
+
+        # only add on to matrices if the count is greater than zero
+        if count_lims_reached > 0:
+            print("Switching to PQ bus: ")
+            for i in i_qlim_lower:
+                known_cur1 = VarMat('Q' + str(i + 1), q_list[i])
+                new_knowns.insert(i + num_p, known_cur1)
+                xmat_cur1 = VarMat('V' + str(i + 1), 1)
+                new_xmat.insert(i + num_p, xmat_cur1)
+
+            for i in i_qlim_upper:
+                known_cur1 = VarMat('Q' + str(i + 1), q_list[i])
+                new_knowns.insert(i + num_p, known_cur1)
+                # strcur = 'V' + str(i+1)
+                xmat_cur2 = VarMat('V' + str(i + 1), 1)
+                new_xmat.insert(i + num_p, xmat_cur2)
+
+        #calculate new bp vals based on how many Qs have passed limits
+        bp_inv, bpp_inv = fdlfBprimes(busnum, yBus, slackbus, pvbus, notype, i_qlim_lower, i_qlim_upper)
+
+        total_lims_reached = len(i_qlim_lower) + len(i_qlim_upper)
+        corrections = iterate_FDLF(knownnum, yBus, t_list, v_list, new_knowns, new_xmat, busnum, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it, total_lims_reached)
+
+        #one loop is done, now we check to see if the reactive power limits are still violated
+        #check the upper limit violations
+        for i in i_qlim_upper:
+            if v_list[i] <= v_orig[i]:
+                q_list[i] = q_lim[i]
+            elif v_list[i] > v_orig[i] and Q[i] >= q_lim[i]:
+                q_list[i] = q_lim[i]
+            elif v_list[i] > v_orig[i] and Q[i] <= -q_lim[i]:
+                q_list[i] = -q_lim[i]
+            else:
+                # set v value back to original
+                v_list[i] = v_orig[i]
+                i_del = i
+                # delete from upper list
+                i_qlim_upper = [x for x in i_qlim_upper if x != i_del]
+                # set q back to nan
+                q_list[i] = np.nan
+                # delete from the xmatrix and mismatch
+                np.delete(new_xmat, i)
+                np.delete(new_knowns, i)
+                knownnum -= 1
+
+        #check the lower limit violations
+        for i in i_qlim_lower:
+            if v_list[i] >= v_orig[i]:
+                q_list[i] = -q_lim[i]
+            elif v_list[i] < v_orig[i] and Q[i] <= -q_lim[i]:
+                q_list[i] = -q_lim[i]
+            elif v_list[i] < v_orig[i] and Q[i] >= q_lim[i]:
+                q_list[i] = -q_lim[i]
+            else:
+                # set v back to original
+                v_list[i] = v_orig[i]
+                i_del = i
+                # delete from lower list
+                i_qlim_lower = [x for x in i_qlim_lower if x != i_del]
+                # set q back to nan
+                q_list[i] = np.nan
+                # delete from xmatrix and mismatch
+                np.delete(new_xmat, i)
+                np.delete(new_knowns, i)
+                knownnum -= 1
+
         # Check corrections matrix for convergence
         count = 0
         for i in range(knownnum):
@@ -1074,11 +1175,90 @@ def loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_
         convergence = count == 0
 
 
+
+
+
+"""
+Function: normal loop for fast decoupled load flow
+iterates until convergence is met or the loop goes 10 times
+"""
+def loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it, qlim_type, q_list, q_lim, num_p):
+
+    convergence = False
+    itno = 0
+    while not (convergence or itno > 10):
+        itno += 1
+        print("\n\nIteration #" + str(itno))
+
+        corrections = iterate_FDLF(knownnum, yBus, t_list, v_list, knowns, xmat, busnum, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it, 0)
+        # Check corrections matrix for convergence
+        count = 0
+        for i in range(knownnum):
+            if abs(corrections[i]) > conv_crit:
+                cur = abs(corrections[i])
+                count += 1
+        convergence = count == 0
+
+"""
+FunctionL fast deoucpled load flow b primes creation
+makes the inverse B' and B'' for use in calculations
+Parameters:
+    - filename - str for excel file
+    - busnum - int total number of buses
+    - yBus - matrix impedance values
+Returns:
+    - bp_inv - inverse matrix of B'
+    - bpp_inv - inverse matrix of B''
+"""
+def fdlfBprimes(busnum, yBus, slackbus, pvbus, notype, i_qlim_lower, i_qlim_upper):
+
+    for j in range(len(i_qlim_lower)):
+        if i_qlim_lower[j] in pvbus:
+            indexcur = np.where(pvbus==i_qlim_lower[j])
+            pvbus = np.delete(pvbus, indexcur)
+
+    for j in range(len(i_qlim_upper)):
+        if i_qlim_upper[j] in pvbus:
+            indexcur = np.where(pvbus==i_qlim_upper[j])
+            pvbus = np.delete(pvbus, indexcur)
+
+
+    # Obtain the inverses of B' and B''
+    bp = np.empty([busnum - len(slackbus) - len(notype), busnum - len(slackbus) - len(notype)])
+    bp[:] = np.nan
+    bpp = np.empty(
+        [busnum - len(slackbus) - len(pvbus) - len(notype), busnum - len(slackbus) - len(pvbus) - len(notype)])
+    bpp[:] = np.nan
+    ic = 0
+    jc = 0
+    icc = 0
+    jcc = 0
+    for i in range(busnum):
+        for j in range(busnum):
+            if i not in slackbus and j not in slackbus and i not in notype and j not in notype:
+                bp[ic, jc] = yBus[i][j].val.imag
+                if jc < busnum - len(slackbus) - len(notype) - 1:
+                    jc += 1
+                else:
+                    jc = 0
+                    ic += 1
+                if i not in pvbus and j not in pvbus:
+                    bpp[icc, jcc] = yBus[i][j].val.imag
+                    if jcc < busnum - len(slackbus) - len(pvbus) - len(notype) - 1:
+                        jcc += 1
+                    else:
+                        jcc = 0
+                        icc += 1
+    bp_inv = np.linalg.inv(bp)
+    bpp_inv = np.linalg.inv(bpp)
+    return bp_inv, bpp_inv
+
 '''
 Function: FastDecoupled
-algorithm with the Fast Decoupled method
+performs Fast Decoupled load flow method
 '''
-def fastDLF(conv_crit, qlimType, filename):
+def fastDLF(conv_crit, qlimType, filename, it_type):
+    startTimeFast = time.time()
     stuff = loadFile(filename)
     v_list = stuff[0]
     t_list = stuff[1]
@@ -1107,51 +1287,27 @@ def fastDLF(conv_crit, qlimType, filename):
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
     piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
     yBusCutsemCalc(y_mini, lines, yBus)
-    #printMultiMat(busnum, yBus, False)
 
     # Get slack and pv buses
     type_list = loadbustype(filename)
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
     notype = np.where(type_list == 'nan')[0]
-    # Obtain the inverses of B' and B''
-    bp = np.empty([busnum - len(slackbus) - len(notype), busnum - len(slackbus) - len(notype)])
-    bp[:] = np.nan
-    bpp = np.empty([busnum - len(slackbus) - len(pvbus) - len(notype), busnum - len(slackbus) - len(pvbus) - len(notype)])
-    bpp[:] = np.nan
-    ic = 0
-    jc = 0
-    icc = 0
-    jcc = 0
-    for i in range(busnum):
-        for j in range(busnum):
-            if i not in slackbus and j not in slackbus and i not in notype and j not in notype:
-                bp[ic, jc] = yBus[i][j].val.imag
-                if jc < busnum - len(slackbus) - len(notype) - 1:
-                    jc += 1
-                else:
-                    jc = 0
-                    ic += 1
-                if i not in pvbus and j not in pvbus:
-                    bpp[icc, jcc] = yBus[i][j].val.imag
-                    if jcc < busnum - len(slackbus) - len(pvbus) - len(notype) - 1:
-                        jcc += 1
-                    else:
-                        jcc = 0
-                        icc += 1
-    bp_inv = np.linalg.inv(bp)
-    bpp_inv = np.linalg.inv(bpp)
+
+    #get the B' and B'' inverses
+    bp_inv, bpp_inv = fdlfBprimes(busnum, yBus, slackbus, pvbus, notype, [], [])
 
     if qlimType == 'none':
-        loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, 'end_it')
+        loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, it_type, qlimType, q_list, q_lim, numT)
     elif qlimType == 'each':
-        num_p = numT
-        #NR_iterate_loop_qlim2(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, q_lim,
-        #                     num_p, 'end_it') # default type is 'end_it', add 'mid_it' for FDLF
+        iterate_fdlf_qlim(conv_crit, busnum, knownnum, slackbus, pvbus, notype, knowns, xmat, yBus, t_list, v_list, q_list, q_lim, numT, it_type)
     else:
-        print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
+        print("error in picking qlim type for fast decoupled")
 
     printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines)
+    endTimeFast = time.time()
+    print("Final running time for Fast Decoupled method is: ", endTimeFast-startTimeFast, "seconds")
+
 
 
 '''
