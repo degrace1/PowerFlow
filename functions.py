@@ -241,42 +241,92 @@ def lineCurrent(line,v_list,t_list,yBus):
 '''
 Function: calculate S in lines
 '''
-def CalcSline(line,v_list,t_list,yBus,I):
+def calcSLine(line,v_list,t_list,current):
     line=str(line)
     i=int(line[0])-1
     j=int(line[1])-1
-    FromS = cmath.rect(v_list[i], t_list[i])*complex(I.real,-I.imag)
-    ToS = cmath.rect(v_list[j], t_list[j])*complex(I.real,-I.imag)
-    return FromS,ToS
+    fromS = cmath.rect(v_list[i], t_list[i])*complex(current.real,-current.imag)
+    toS = cmath.rect(v_list[j], t_list[j])*complex(current.real,-current.imag)
+    return fromS,toS
 
 '''
 Function: calculate P line flows From, To, losses
 '''
-def CalcPflow(line,v_list,t_list,yBus,I,FromS,ToS):
-    FromP = FromS.real
-    ToP = ToS.real
-    Ploss = np.abs(np.abs(ToP) - np.abs(FromP))
-    return  FromP , ToP, Ploss
+def calcPFlow(line,v_list,t_list,yBus,I,fromS,toS):
+    fromP = fromS.real
+    toP = toS.real
+    pLoss = np.abs(np.abs(toP) - np.abs(fromP))
+    return fromP, toP, pLoss
 '''
 Function: calculate P line flows From, To, losses
 '''
-def CalcQflow(line,v_list,t_list,yBus,I,FromS,ToS):
-    FromQ = FromS.imag
-    ToQ= ToS.imag
-    Qloss = np.abs(np.abs(ToQ) - np.abs(FromQ))
-    return  FromQ , ToQ, Qloss
+def calcqFlow(line,v_list,t_list,yBus,I,fromS,toS):
+    fromQ = fromS.imag
+    toQ= toS.imag
+    qLoss = np.abs(np.abs(toQ) - np.abs(fromQ))
+    return fromQ, toQ, qLoss
 
 '''
 Function: calculate I line flows From, To, losses
 '''
-def CalcIflow(line,v_list,t_list,yBus,I,FromS,ToS):
+def calcIFlow(line,v_list,t_list,yBus,I,fromS,toS):
     elem=str(line)
     i=int(line[0])-1
     j=int(line[1])-1
-    FromI = cmath.sqrt(np.abs(FromS*yBus[i][j].val))
-    ToI= cmath.sqrt(np.abs(ToS*yBus[j][i].val))
-    return  FromI, ToI
+    FromI = cmath.sqrt(np.abs(fromS*yBus[i][j].val))
+    ToI= cmath.sqrt(np.abs(toS*yBus[j][i].val))
+    return FromI, ToI
+"""
+Function: print finals
+print final values for the power flow method
+"""
+def printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines):
+    for i in range(busnum):
+        if np.isnan(p_list[i]):
+            p_list[i] = calcP(i, yBus, busnum, t_list, v_list) # calcPVal(i, yBus, busnum, t_list, v_list)
+        if np.isnan(q_list[i]):
+            q_list[i] = calcQ(i, yBus, busnum, t_list, v_list) # calcQVal(i, yBus, busnum, t_list, v_list)
+    print('Final P and Q Values: ')
+    for i in range(busnum):
+        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
 
+    Iline = []
+    Sline = []
+    pFlow = []
+    qFlow = []
+    totalPLosses=0
+    totalQLosses=0
+    for elem in lines:
+        line=str(elem)
+        current = lineCurrent(line,v_list,t_list,yBus)
+        S = calcSLine(line,v_list,t_list,yBus,current)
+        Sline.append([np.abs(S[0]),np.abs(S[1])])
+        P = calcPFlow(line,v_list,t_list,yBus,current,S[0],S[1])
+        totalPLosses+=P[2]
+        pFlow.append([P[0],P[1],P[2]])
+        Q = calcqFlow(line,v_list,t_list,yBus,current,S[0],S[1])
+        totalQLosses+=Q[2]
+        qFlow.append([Q[0],Q[1],Q[2]])
+        I = calcIFlow(line,v_list,t_list,yBus,current,S[0],S[1])
+        Iline.append([np.abs(I[0]),np.abs(I[1])])
+
+
+    print('Flow lines and Losses: ')
+    print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
+    for i in range(len(lines)):
+        line=str(lines[i])
+        print("P", int(line[0]), ": ", "{:.4f}".format(pFlow[i][0]), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(pFlow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(pFlow[i][2]))
+    print('Total P losses = ',"{:.4f}".format(totalPLosses))
+    print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
+    for i in range(len(lines)):
+        line=str(lines[i])
+        print("Q", int(line[0]), ": ", "{:.4f}".format(qFlow[i][0]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(qFlow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(qFlow[i][2]))
+    print('Total Q losses = ',"{:.4f}".format(totalQLosses))
+    print('Apparent Powers and Currents in lines: ')
+    print('S From Bus injection: ', "\t\t",'I From Bus injection: ', "\t\t",'S To Bus injection: ', "\t\t",'I To Bus injection: ')
+    for i in range(len(lines)):
+        line=str(lines[i])
+        print("S", int(line[0]), ": ", "{:.4f}".format(Sline[i][0]), "\t\t\t", "I", int(line[0]),int(line[1]), ": ", "{:.4f}".format(Iline[i][0]), "\t\t\t", "S", int(line[1]), ": ", "{:.4f}".format(Sline[i][1]), "\t\t\t", "I", int(line[1]),int(line[0]), ": ", "{:.4f}".format(Iline[i][1]))
 
 '''
 Function: calculate partial derivative dPi / dTi
@@ -780,53 +830,7 @@ def newtonRhapson(conv_crit, qlimType, filename):
     else:
         print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
 
-
-    for i in range(busnum):
-        if np.isnan(p_list[i]):
-            p_list[i] = calcP(i, yBus, busnum, t_list, v_list) # calcPVal(i, yBus, busnum, t_list, v_list)
-        if np.isnan(q_list[i]):
-            q_list[i] = calcQ(i, yBus, busnum, t_list, v_list) # calcQVal(i, yBus, busnum, t_list, v_list)
-    print('Final P and Q Values: ')
-    for i in range(busnum):
-        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
-
-    Iline = []
-    Sline = []
-    Pflow = []
-    Qflow = []
-    TotalPlosses=0
-    TotalQlosses=0
-    for elem in lines:  
-        line=str(elem)  
-        current = lineCurrent(line,v_list,t_list,yBus)
-        S = CalcSline(line,v_list,t_list,yBus,current)
-        Sline.append([np.abs(S[0]),np.abs(S[1])])
-        P = CalcPflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        TotalPlosses+=P[2]
-        Pflow.append([P[0],P[1],P[2]])
-        Q = CalcQflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        TotalQlosses+=Q[2]
-        Qflow.append([Q[0],Q[1],Q[2]])
-        I = CalcIflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        Iline.append([np.abs(I[0]),np.abs(I[1])])
-
-
-    print('Flow lines and Losses: ')
-    print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("P", int(line[0]), ": ", "{:.4f}".format(Pflow[i][0]), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(Pflow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Pflow[i][2]))
-    print('Total P losses = ',"{:.4f}".format(TotalPlosses))
-    print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("Q", int(line[0]), ": ", "{:.4f}".format(Qflow[i][0]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(Qflow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Qflow[i][2]))
-    print('Total Q losses = ',"{:.4f}".format(TotalQlosses))
-    print('Apparent Powers and Currents in lines: ')
-    print('S From Bus injection: ', "\t\t",'I From Bus injection: ', "\t\t",'S To Bus injection: ', "\t\t",'I To Bus injection: ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("S", int(line[0]), ": ", "{:.4f}".format(Sline[i][0]), "\t\t\t", "I", int(line[0]),int(line[1]), ": ", "{:.4f}".format(Iline[i][0]), "\t\t\t", "S", int(line[1]), ": ", "{:.4f}".format(Sline[i][1]), "\t\t\t", "I", int(line[1]),int(line[0]), ": ", "{:.4f}".format(Iline[i][1]))
+    printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines)
 
 '''
 Function: Calculate DC Power Flow
@@ -1142,55 +1146,7 @@ def FastDecoupled(conv_crit, filenameFDLF):
                 count += 1
         convergence = count == 0
 
-    # get other values of P and Q
-    for i in range(busnum):
-        if np.isnan(p_list[i]):
-            p_list[i] = calcP(i, yBus, busnum, t_list, v_list)
-        if np.isnan(q_list[i]):
-            q_list[i] = calcQ(i, yBus, busnum, t_list, v_list)
-    print("Ps")
-    print(p_list)
-    print("Qs")
-    print(q_list)
-
-    Iline = []
-    Sline = []
-    Pflow = []
-    Qflow = []
-    TotalPlosses=0
-    TotalQlosses=0
-    for elem in lines:  
-        line=str(elem)  
-        current = lineCurrent(line,v_list,t_list,yBus)
-        S = CalcSline(line,v_list,t_list,yBus,current)
-        Sline.append([np.abs(S[0]),np.abs(S[1])])
-        P = CalcPflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        TotalPlosses+=P[2]
-        Pflow.append([P[0],P[1],P[2]])
-        Q = CalcQflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        TotalQlosses+=Q[2]
-        Qflow.append([Q[0],Q[1],Q[2]])
-        I = CalcIflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        Iline.append([np.abs(I[0]),np.abs(I[1])])
-
-
-    print('Flow lines and Losses: ')
-    print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("P", int(line[0]), ": ", "{:.4f}".format(Pflow[i][0]), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(Pflow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Pflow[i][2]))
-    print('Total P losses = ',"{:.4f}".format(TotalPlosses))
-    print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("Q", int(line[0]), ": ", "{:.4f}".format(Qflow[i][0]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(Qflow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Qflow[i][2]))
-    print('Total Q losses = ',"{:.4f}".format(TotalQlosses))
-    print('Apparent Powers and Currents in lines: ')
-    print('S From Bus injection: ', "\t\t",'I From Bus injection: ', "\t\t",'S To Bus injection: ', "\t\t",'I To Bus injection: ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("S", int(line[0]), ": ", "{:.4f}".format(Sline[i][0]), "\t\t\t", "I", int(line[0]),int(line[1]), ": ", "{:.4f}".format(Iline[i][0]), "\t\t\t", "S", int(line[1]), ": ", "{:.4f}".format(Sline[i][1]), "\t\t\t", "I", int(line[1]),int(line[0]), ": ", "{:.4f}".format(Iline[i][1]))
-
+    printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines)
 
 
 '''
@@ -1235,49 +1191,5 @@ def decoupledLoadFlow(conv_crit, filenameDLF):
     jacobian = [[JacElem() for i in range(int(knownnum))] for j in range(int(knownnum))]
     nameJacElem(knownnum, knowns, xmat, jacobian)
     loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, 'DLF')
-    for i in range(busnum):
-        if np.isnan(p_list[i]):
-            p_list[i] = calcP(i, yBus, busnum, t_list, v_list)
-        if np.isnan(q_list[i]):
-            q_list[i] = calcQ(i, yBus, busnum, t_list, v_list)
-    print('Final P and Q Values: ')
-    for i in range(busnum):
-        print("P", i + 1, ": ", "{:.4f}".format(p_list[i]), "\t\t\t", "Q", i + 1, ": ", "{:.4f}".format(q_list[i]))
-    
-    Iline = []
-    Sline = []
-    Pflow = []
-    Qflow = []
-    TotalPlosses=0
-    TotalQlosses=0
-    for elem in lines:  
-        line=str(elem)  
-        current = lineCurrent(line,v_list,t_list,yBus)
-        S = CalcSline(line,v_list,t_list,yBus,current)
-        Sline.append([np.abs(S[0]),np.abs(S[1])])
-        P = CalcPflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        TotalPlosses+=P[2]
-        Pflow.append([P[0],P[1],P[2]])
-        Q = CalcQflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        TotalQlosses+=Q[2]
-        Qflow.append([Q[0],Q[1],Q[2]])
-        I = CalcIflow(line,v_list,t_list,yBus,current,S[0],S[1])
-        Iline.append([np.abs(I[0]),np.abs(I[1])])
 
-
-    print('Flow lines and Losses: ')
-    print('P From Bus injection: ', "\t\t",'P To Bus injection: ', "\t\t\t",'P Losses (R.I^2): ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("P", int(line[0]), ": ", "{:.4f}".format(Pflow[i][0]), "\t\t\t", "P", int(line[1]), ": ", "{:.4f}".format(Pflow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Pflow[i][2]))
-    print('Total P losses = ',"{:.4f}".format(TotalPlosses))
-    print('Q From Bus injection: ', "\t\t",'Q To Bus injection: ', "\t\t\t",'Q Losses (X.I^2): ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("Q", int(line[0]), ": ", "{:.4f}".format(Qflow[i][0]), "\t\t\t", "Q", int(line[1]), ": ", "{:.4f}".format(Qflow[i][1]), "\t\t\t", "line ", int(line), ": ", "{:.4f}".format(Qflow[i][2]))
-    print('Total Q losses = ',"{:.4f}".format(TotalQlosses))
-    print('Apparent Powers and Currents in lines: ')
-    print('S From Bus injection: ', "\t\t",'I From Bus injection: ', "\t\t",'S To Bus injection: ', "\t\t",'I To Bus injection: ')
-    for i in range(len(lines)):
-        line=str(lines[i])      
-        print("S", int(line[0]), ": ", "{:.4f}".format(Sline[i][0]), "\t\t\t", "I", int(line[0]),int(line[1]), ": ", "{:.4f}".format(Iline[i][0]), "\t\t\t", "S", int(line[1]), ": ", "{:.4f}".format(Sline[i][1]), "\t\t\t", "I", int(line[1]),int(line[0]), ": ", "{:.4f}".format(Iline[i][1]))
+    printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines)
