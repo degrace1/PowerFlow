@@ -13,7 +13,6 @@ load initial excel file to get needed lists/info for the rest of the code
 '''
 def loadFile(filename):
     #read excel file
-    #filename = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/' + filename
     initial = pd.read_excel(filename, sheet_name='initial', index_col='bus_num')
     #extract number of buses
     busnum = len(initial.index)
@@ -784,7 +783,6 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
         itno += 1
 
 def newtonRhapson(conv_crit, qlimType, filename):
-    startNRTime = time.time()
     stuff = loadFile(filename)
     v_list = stuff[0]
     t_list = stuff[1]
@@ -939,124 +937,149 @@ def loadbustype(filenameFDLF):
     return type_list
 
 '''
-Function: iterate_FDLF
-the angles are updated halfway to then obtain Q mismatches and update the Vs
+Function: iterate FDLF
 '''
-def iterate_FDLF(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, knowns, busnum):
-    new_knowns = [VarMat() for i in range(knownnum)]
-    net_injections = [VarMat() for i in range(knownnum)]
+def iterate_FDLF(knownnum, ybus, t_list, v_list, knowns, xmat, busnum, qnum, num_lims, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it='end_it'):
+    #make temp knowns matrix without the names
+    new_knowns = [0 for i in range(knownnum)]
+    net_injections = [0 for i in range(knownnum)]
     for i in range(knownnum):
-        new_knowns[i].name = knowns[i].name
-        new_knowns[i].val = knowns[i].val
-    # active power mismatches
-    dP_V = [0 for i in range(busnum-len(slackbus))]
-    corrections = [VarMat() for i in range(knownnum)]
-    cue = 0
-    for i in range(knownnum):
-        num = int(knowns[i].name[1])-1
-        type = knowns[i].name[0]
-        net_injections[i].name = knowns[i].name
-        if type == 'P':
-            net_injections[i].val = calcP(num, ybus, busnum, t_list, v_list)
-            new_knowns[i].val = new_knowns[i].val - net_injections[i].val
-            dP_V[cue] = new_knowns[i].val / v_list[num]
-            cue += 1
-            corrections[i].name = 'T' + knowns[i].name[1]
-    # solve for dT
-    dT = -np.dot(bp_inv, np.transpose(dP_V))
-    # update the angles
-    cue = 0
-    for j in range(knownnum):
-        if xmat[j].name[0] == "T":
-            corrections[j].val = dT[cue]
-            xmat[j].val += corrections[j].val
-            t_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
-            cue += 1
-
-    # reactive power mismatches (using updated values of T)
-    dQ_V = [0 for i in range(busnum - len(slackbus) - len(pvbus))]
-    cue = 0
-    for i in range(knownnum):
-        num = int(knowns[i].name[1]) - 1
-        type = knowns[i].name[0]
-        if type == 'Q':
-            net_injections[i].val = calcQ(num, ybus, busnum, t_list, v_list)
-            new_knowns[i].val = new_knowns[i].val - net_injections[i].val
-            dQ_V[cue] = new_knowns[i].val / v_list[num]
-            cue += 1
-            corrections[i].name = 'V' + knowns[i].name[1]
-    # solve for dV
-    dV = -np.dot(bpp_inv, np.transpose(dQ_V))
-    # update the voltages
-    cue = 0
-    for j in range(knownnum):
-        if xmat[j].name[0] == "V":
-            corrections[j].val = dV[cue]
-            xmat[j].val += corrections[j].val
-            v_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
-            cue += 1
-
-    return corrections, new_knowns
-
-
-'''
-Function: iterate_FDLF_endit
-updates of angles and voltages are done at the end of the iteration, after getting P and Q mismatches
-'''
-def iterate_FDLF_endit(knownnum, ybus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, knowns, busnum):
-    new_knowns = [VarMat() for i in range(knownnum)]
-    net_injections = [VarMat() for i in range(knownnum)]
-    for i in range(knownnum):
-        new_knowns[i].name = knowns[i].name
-        new_knowns[i].val = knowns[i].val
-    # active and reactive power mismatches (not updating values of T)
-    dP_V = [0 for i in range(busnum-len(slackbus))]
-    dQ_V = [0 for i in range(busnum - len(slackbus) - len(pvbus))]
-    corrections = [VarMat() for i in range(knownnum)]
+        new_knowns[i] = knowns[i].val
+    dP_V = [0 for i in range(busnum - len(slackbus) - len(notype))]
+    dQ_V = [0 for i in range(busnum - len(slackbus) - len(pvbus) - len(notype))]
+    corrections = [0 for i in range(knownnum)]
     cueP = 0
     cueQ = 0
+
+    if type_it == 'end_it':
+        # calculate P and Q mismatches
+        for i in range(knownnum):
+            #for each known value, calculate the new value of P or Q and subtract them
+            num = int(knowns[i].name[1])-1
+            type = knowns[i].name[0]
+            if type == 'P':
+                #Note: change generating/not +/- for P and Q IN EXCEL
+                new_p = calcP(num, ybus, busnum, t_list, v_list)
+                net_injections[i] = new_p
+                new_knowns[i] = new_knowns[i] - new_p
+                dP_V[cueP] = new_knowns[i] / v_list[num]
+                cueP += 1
+            else:
+                #Note: change generating/not +/- for P and Q IN EXCEL
+                new_q = calcQ(num, ybus, busnum, t_list, v_list)
+                net_injections[i] = new_q
+                new_knowns[i] = new_knowns[i] - new_q
+                dQ_V[cueQ] = new_knowns[i] / v_list[num]
+                cueQ += 1
+        # solve for dT and dV
+        dT = -np.dot(bp_inv, np.transpose(dP_V))
+        dV = -np.dot(bpp_inv, np.transpose(dQ_V))
+        cueP = 0
+        cueQ = 0
+        for j in range(knownnum):
+            if xmat[j].name[0] == "T":
+                corrections[j] = dT[cueP]
+                xmat[j].val += corrections[j]
+                t_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
+                cueP += 1
+            elif xmat[j].name[0] == "V":
+                corrections[j] = dV[cueQ]
+                xmat[j].val += corrections[j]
+                v_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
+                cueQ += 1
+            else:
+                print("error thrown in updating v and t lists")
+
+    elif type_it == 'mid_it':
+        # calculate P mismatches
+        for i in range(knownnum):
+            #for each known value, calculate the new value of P or Q and subtract them
+            num = int(knowns[i].name[1])-1
+            type = knowns[i].name[0]
+            if type == 'P':
+                #Note: change generating/not +/- for P and Q IN EXCEL
+                new_p = calcP(num, ybus, busnum, t_list, v_list)
+                net_injections[i] = new_p
+                new_knowns[i] = new_knowns[i] - new_p
+                dP_V[cueP] = new_knowns[i] / v_list[num]
+                cueP += 1
+        # solve for dT
+        dT = -np.dot(bp_inv, np.transpose(dP_V))
+        # update the angles
+        cueP = 0
+        for j in range(knownnum):
+            if xmat[j].name[0] == "T":
+                corrections[j] = dT[cueP]
+                xmat[j].val += corrections[j]
+                t_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
+                cueP += 1
+        # calculate Q mismatches
+        for i in range(knownnum):
+            # for each known value, calculate the new value of P or Q and subtract them
+            num = int(knowns[i].name[1]) - 1
+            type = knowns[i].name[0]
+            if type == 'Q':
+                # Note: change generating/not +/- for Q and Q IN EXCEL
+                new_q = calcQ(num, ybus, busnum, t_list, v_list)
+                net_injections[i] = new_q
+                new_knowns[i] = new_knowns[i] - new_q
+                dQ_V[cueQ] = new_knowns[i] / v_list[num]
+                cueQ += 1
+        # solve for dV
+        dV = -np.dot(bpp_inv, np.transpose(dQ_V))
+        # update the voltages
+        cueQ = 0
+        for j in range(knownnum):
+            if xmat[j].name[0] == "V":
+                corrections[j] = dV[cueQ]
+                xmat[j].val += corrections[j]
+                v_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
+                cueQ += 1
+    else:
+        print("error in type of iteration (end_it or mid_it)")
+
+    print("Net Injections: ")
     for i in range(knownnum):
-        num = int(knowns[i].name[1])-1
-        type = knowns[i].name[0]
-        net_injections[i].name = knowns[i].name
-        if type == 'P':
-            net_injections[i].val = calcP(num, ybus, busnum, t_list, v_list)
-            new_knowns[i].val = new_knowns[i].val - net_injections[i].val
-            dP_V[cueP] = new_knowns[i].val / v_list[num]
-            cueP += 1
-            corrections[i].name = 'T' + knowns[i].name[1]
-        else:
-            net_injections[i].val = calcQ(num, ybus, busnum, t_list, v_list)
-            new_knowns[i].val = new_knowns[i].val - net_injections[i].val
-            dQ_V[cueQ] = new_knowns[i].val / v_list[num]
-            cueQ += 1
-            corrections[i].name = 'V' + knowns[i].name[1]
-    # solve for dT and dV
-    dT = -np.dot(bp_inv, np.transpose(dP_V))
-    dV = -np.dot(bpp_inv, np.transpose(dQ_V))
-    # update the angles and voltages
-    cueP = 0
-    cueQ = 0
-    for j in range(knownnum):
-        if xmat[j].name[0] == "T":
-            corrections[j].val = dT[cueP]
-            xmat[j].val += corrections[j].val
-            t_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
-            cueP += 1
-        else:
-            corrections[j].val = dV[cueQ]
-            xmat[j].val += corrections[j].val
-            v_list[(int(xmat[j].name[1]) - 1)] = xmat[j].val
-            cueQ += 1
-    return corrections, new_knowns
+        print(knowns[i].name, ': ', net_injections[i])
+    if num_lims>=1:
+        q_limit = [0 for i in range(num_lims)]
+        for i in range(num_lims):
+            q_limit[i] = calcQ(qnum[i]-1, ybus, busnum, t_list, v_list)
+    else:
+        q_limit = 0
+    print("Corrections Vector (dV, dT): ")
+    print(corrections)
+    print("RHS Vector (dP, dQ): ")
+    print(new_knowns)
+    print("New voltage magnitudes and angles (in degrees):")
+    for i in range(busnum):
+        print("|V|", i + 1, ": ", "{:.4f}".format(v_list[i]), "\t\t", "Theta", i + 1, ": ",
+              "{:.4f}".format(t_list[i] * 180 / math.pi))
+    return corrections, q_limit
+
+def loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it):
+    convergence = False
+    itno = 0
+    while not (convergence or itno > 10):
+        itno += 1
+        print("\n\nIteration #" + str(itno))
+        outputs = iterate_FDLF(knownnum, yBus, t_list, v_list, knowns, xmat, busnum, 0, 0, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it)
+        corrections = outputs[0]
+        # Check corrections matrix for convergence
+        count = 0
+        for i in range(knownnum):
+            if abs(corrections[i]) > conv_crit:
+                cur = abs(corrections[i])
+                count += 1
+        convergence = count == 0
+
 
 '''
 Function: FastDecoupled
 algorithm with the Fast Decoupled method
 '''
-def FastDecoupled(conv_crit, filenameFDLF):
-    # Read the excel and save variables
-    stuff = loadFile(filenameFDLF)
+def fastDLF(conv_crit, qlimType, filename):
+    stuff = loadFile(filename)
     v_list = stuff[0]
     t_list = stuff[1]
     p_list = stuff[2]
@@ -1073,34 +1096,28 @@ def FastDecoupled(conv_crit, filenameFDLF):
     numV = stuff[13]
     t_x = stuff[14]
     t_a = stuff[15]
-    # Get slack and pv buses
-    type_list = loadbustype(filenameFDLF)
-    slackbus = np.where(type_list == 'slack')[0]
-    pvbus = np.where(type_list == 'pv')[0]
+    q_lim = stuff[16]
 
     knowns = [VarMat() for i in range(int(knownnum))]
     xmat = [VarMat() for j in range(int(knownnum))]
     getInitMats(xmat, knowns, p_list, q_list, busnum)
     setInitGuess(knownnum, xmat, v_list, t_list)
-
-    # Obtain the yBus
     yBus = [[VarMat() for i in range(int(busnum))] for j in range(int(busnum))]
     nameYbus(busnum, yBus)
     y_mini = [[complex(0, 0) for i in range(4)] for j in range(lines.size)]
     piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a)
     yBusCutsemCalc(y_mini, lines, yBus)
-    print("YBus: ")
-    printMultiMat(busnum, yBus, False)
+    #printMultiMat(busnum, yBus, False)
 
     # Get slack and pv buses
-    type_list = loadbustype(filenameFDLF)
+    type_list = loadbustype(filename)
     slackbus = np.where(type_list == 'slack')[0]
     pvbus = np.where(type_list == 'pv')[0]
-
+    notype = np.where(type_list == 'nan')[0]
     # Obtain the inverses of B' and B''
-    bp = np.empty([busnum-len(slackbus), busnum-len(slackbus)])
+    bp = np.empty([busnum - len(slackbus) - len(notype), busnum - len(slackbus) - len(notype)])
     bp[:] = np.nan
-    bpp = np.empty([busnum - len(slackbus) - len(pvbus), busnum-len(slackbus)-len(pvbus)])
+    bpp = np.empty([busnum - len(slackbus) - len(pvbus) - len(notype), busnum - len(slackbus) - len(pvbus) - len(notype)])
     bpp[:] = np.nan
     ic = 0
     jc = 0
@@ -1108,16 +1125,16 @@ def FastDecoupled(conv_crit, filenameFDLF):
     jcc = 0
     for i in range(busnum):
         for j in range(busnum):
-            if i not in slackbus and j not in slackbus:
+            if i not in slackbus and j not in slackbus and i not in notype and j not in notype:
                 bp[ic, jc] = yBus[i][j].val.imag
-                if jc < busnum - len(slackbus) - 1:
+                if jc < busnum - len(slackbus) - len(notype) - 1:
                     jc += 1
                 else:
                     jc = 0
                     ic += 1
                 if i not in pvbus and j not in pvbus:
                     bpp[icc, jcc] = yBus[i][j].val.imag
-                    if jcc < busnum - len(slackbus) - len(pvbus) - 1:
+                    if jcc < busnum - len(slackbus) - len(pvbus) - len(notype) - 1:
                         jcc += 1
                     else:
                         jcc = 0
@@ -1125,32 +1142,14 @@ def FastDecoupled(conv_crit, filenameFDLF):
     bp_inv = np.linalg.inv(bp)
     bpp_inv = np.linalg.inv(bpp)
 
-    # iteration process
-    convergence = False
-    itno = 0
-    while not convergence:
-        itno += 1
-        print("\n\n Iteration #" + str(itno))
-        temp_knowns = knowns
-        # option of iterate with "iterate_FDLF" or "iterate_FDLF_endit"
-        outputs = iterate_FDLF(knownnum, yBus, bp_inv, bpp_inv, xmat, slackbus, pvbus, t_list, v_list, temp_knowns, busnum)
-        corrections = outputs[0]
-        rhs = outputs[1]
-        print("Corrections Vector (dV, dT): ")
-        printMat(knownnum, corrections)
-        print("RHS Vector (dP, dQ): ")
-        printMat(knownnum, rhs)
-        print('')
-        print("New voltage angles and magnitudes")
-        printMat(knownnum, xmat)
-        print('')
-
-        count = 0
-        for i in range(knownnum):
-            if abs(corrections[i].val) > conv_crit:
-                cur = abs(corrections[i].val)
-                count += 1
-        convergence = count == 0
+    if qlimType == 'none':
+        loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, 'end_it')
+    elif qlimType == 'each':
+        num_p = numT
+        #NR_iterate_loop_qlim2(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, q_lim,
+        #                     num_p, 'end_it') # default type is 'end_it', add 'mid_it' for FDLF
+    else:
+        print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
 
     printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines)
 
