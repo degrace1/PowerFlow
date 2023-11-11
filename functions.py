@@ -836,6 +836,14 @@ def newtonRhapson(conv_crit, qlimType, filename):
 
 '''
 Function: Calculate DC Power Flow
+This function finds what the slack bus number is and gets the Ybus_DC. Then it calculates the DC load flow angles
+and the line flows.
+Parameters:
+    filenameDCPF - type(str), test system excel document
+Returns:
+    slack_bus+1 - type(int), which bus is the slack bus
+    xmat_final - type(ndarray), matrix with solution angles at each 
+    PlineDC - type(list), line power flows
 '''
 def calcDCPF(filenameDCPF):
     stuff = loadFile(filenameDCPF)
@@ -907,6 +915,9 @@ def calcDCPF(filenameDCPF):
 
 '''
 Function: Prints DC Power Flow
+This function prints the results of calcDCPF and calculates the running time.
+Parameters:
+    filenameDCPF - type(str), test system excel document
 '''
 def printDCPF(filenameDCPF):
     startTimeDC = time.time()
