@@ -1,4 +1,7 @@
-# Functions file for Power FLow 4205 Project
+"""
+Functions file for Power FLow 4205 Project
+Group 2 - Fall 2023
+"""
 from classes import *
 import numpy as np
 import pandas as pd
@@ -10,6 +13,8 @@ import time
 '''
 Function: load file
 load initial excel file to get needed lists/info for the rest of the code
+Parameters:
+    - filename: string
 '''
 def loadFile(filename):
     #read excel file
@@ -60,15 +65,11 @@ This function asks the user to input the initial knowns (P, Q) and their associa
 If the user inputs a P, a T for delta/angle will be added to the unknown matrix. If a Q is
 entered, a V will be added.
 Parameters:
-    busnum - total number of buses
-    xmat - empty matrix of size busnum rows and 1 column (unknowns matrix)
-    knowns - empty matrix of size busnum rows and 1 column (knowns matrix)
-    p_list - p vals
-    q_list - q vals
-Returns:
-    known - the filled known matrix with name and values
-    xmat - the filled unknown matrix with name only
-
+    - busnum: total number of buses
+    - xmat: empty matrix of size busnum rows and 1 column (unknowns matrix)
+    - knowns: empty matrix of size busnum rows and 1 column (knowns matrix)
+    - p_list: p vals
+    - q_list: q vals
 """
 def getInitMats(xmat, knowns, p_list, q_list, busnum):
     sumcount = 0
@@ -97,8 +98,6 @@ This function sets the initial guesses of 1.0pu for voltage and 0 for angle
 Parameters:
     knownnum - number of knowns in the system
     xmat - matrix of unknowns with only names
-Returns
-    xmat - matrix of unknowns with names and initial guesses
 """
 def setInitGuess(knownNum, xmat, v_list, t_list):
     for i in range(int(knownNum)):
@@ -114,8 +113,6 @@ This will print a known or unknown matrix (rows amount = busnum, column = 1)
 Parameters:
     num - number of elem for rows in matrix
     xmat - matrix
-Returns:
-    nothing, just print
 """
 def printMat(num, xmat):
     for i in range(int(num)):
@@ -128,8 +125,6 @@ This will print a matrix (probably Ybus, jacobian)
 Parameters:
     num - number of elem for rows and columns in matrix
     xmat - matrix
-Returns:
-    nothing, just print
 """
 def printMultiMat(num, mat, jac):
     str_print = ['' for i in range(int(num))]
@@ -147,7 +142,6 @@ def printMultiMat(num, mat, jac):
 """
 Function: name Y bus
 This will set the names of the Ybus matrix things.
-
 Parameters:
     busnum - number of nuses for matrix size indeces
     yBus - matrix with yBus names and vals
@@ -163,6 +157,14 @@ def nameYbus(busnum, yBus):
 '''
 Function: pi line model
 for creating a 2x2 admittance matrix for a one line system. Part 1 of the Cutsem method.
+Parameters:
+    - r_list: array of real parts of line 
+    - x_list: array of imaginary parts of line
+    - x_shunt: array of shunt values
+    - y_mini: array to be filled in with each pi-line model
+    - lines: list of lines in form '12' for from bus 1 to bus 2
+    - t_x: transformer x value
+    - t_a: transformer a value
 '''
 def piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a):
     line_num = lines.size
@@ -184,6 +186,11 @@ def piLine(r_list, x_list, x_shunt, y_mini, lines, t_x, t_a):
 
 '''
 Function: Ybus calculations with cutsem algorithm/pi line model
+Takes in the pi-line models for each line and sums them to create the large admittance matrix
+Parameters:
+    - y_mini: array of mini pi-line models for each line
+    - lines: list of names of lines
+    - yBus: nd array of the empty admittance matrix to be filled in
 '''
 def yBusCutsemCalc(y_mini, lines, yBus):
     for i in range(len(lines)):
@@ -194,8 +201,15 @@ def yBusCutsemCalc(y_mini, lines, yBus):
         yBus[a][b].val += y_mini[i][1]
         yBus[b][a].val += y_mini[i][2]
         yBus[b][b].val += y_mini[i][3]
+
 '''
 Function: calculate uij
+Calculates Uij for ease in jacobian calcs
+Parameters:
+    - gij: real part
+    - bij: imaginary part
+    - thetai: first angle
+    - thetaj: second angle
 '''
 def uij(gij, bij, thetai, thetaj):
     return (-gij * np.sin(thetai - thetaj) - (-bij * np.cos(thetai - thetaj)))
@@ -203,6 +217,12 @@ def uij(gij, bij, thetai, thetaj):
 
 '''
 Function: calculate tij
+Calculates Tij for ease in jacobian calcs
+Parameters:
+    - gij: real part
+    - bij: imaginary part
+    - thetai: first angle
+    - thetaj: second angle
 '''
 def tij(gij, bij, thetai, thetaj):
     return (-gij * np.cos(thetai - thetaj) + (-bij * np.sin(thetai - thetaj)))
@@ -210,6 +230,12 @@ def tij(gij, bij, thetai, thetaj):
 
 '''
 Function: calculate P value
+Parameters:
+    - i: int of current P index to be calculated
+    - yBus: nd array of admittance matrix
+    - busnum: number of buses
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
 '''
 def calcP(i, yBus, busnum, T, V):
     p = 0
@@ -219,6 +245,12 @@ def calcP(i, yBus, busnum, T, V):
 
 '''
 Function: calculate Q value
+Parameters:
+    - i: int of current P index to be calculated
+    - yBus: nd array of admittance matrix
+    - busnum: number of buses
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
 '''
 def calcQ(i, yBus, busnum, T, V):
     q = 0
@@ -228,6 +260,11 @@ def calcQ(i, yBus, busnum, T, V):
 
 '''
 Function: calculate I in lines
+Parameters:
+    - line: current line
+    - v_list: array of voltage magnitudes
+    - t_list: array of voltage angles 
+    - yBus: nd array of admittance matrix
 '''
 def lineCurrent(line,v_list,t_list,yBus):
     line=str(line)
@@ -238,6 +275,11 @@ def lineCurrent(line,v_list,t_list,yBus):
 
 '''
 Function: calculate S in lines
+Parameters:
+    - line: current line
+    - v_list: array of voltage magnitudes
+    - t_list: array of voltage angles 
+    - current: current value for line
 '''
 def calcSLine(line,v_list,t_list,current):
     line=str(line)
@@ -249,6 +291,9 @@ def calcSLine(line,v_list,t_list,current):
 
 '''
 Function: calculate P line flows From, To, losses
+Parameters:
+    - fromS: power from the line
+    - toS: power to the line
 '''
 def calcPFlow(fromS,toS):
     fromP = fromS.real
@@ -257,6 +302,9 @@ def calcPFlow(fromS,toS):
     return fromP, toP, pLoss
 '''
 Function: calculate P line flows From, To, losses
+Parameters:
+    - fromS: power from the line
+    - toS: power to the line
 '''
 def calcqFlow(fromS,toS):
     fromQ = fromS.imag
@@ -266,6 +314,11 @@ def calcqFlow(fromS,toS):
 
 '''
 Function: calculate I line flows From, To, losses
+Parameters:
+    - line: current line
+    - yBus: nd array of admittance matrix
+    - fromS: power from the line
+    - toS: power to the line
 '''
 def calcIFlow(line,yBus,fromS,toS):
     elem=str(line)
@@ -274,9 +327,18 @@ def calcIFlow(line,yBus,fromS,toS):
     FromI = cmath.sqrt(np.abs(fromS*yBus[i][j].val))
     ToI= cmath.sqrt(np.abs(toS*yBus[j][i].val))
     return FromI, ToI
+
 """
 Function: print finals
 print final values for the power flow method
+Parameters:
+    - busnum: int of number of buses
+    - v_list: array of voltage magnitudes
+    - t_list: array of voltage angles 
+    - yBus: nd array of admittance matrix
+    - p_list: p vals
+    - q_list: q vals
+    - lines: list of lines
 """
 def printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines):
     for i in range(busnum):
@@ -328,6 +390,12 @@ def printFinals(busnum, p_list, q_list, yBus, t_list, v_list, lines):
 
 '''
 Function: calculate partial derivative dPi / dTi
+Parameters:
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
+    - i: int of current index to be calculated
+    - yBus: nd array of admittance matrix
+    - busnum: int of number of buses
 '''
 def dpidti(i, V, yBus, T, busnum):
     i = int(i)
@@ -340,6 +408,12 @@ def dpidti(i, V, yBus, T, busnum):
 
 '''
 Function: calculate partial derivative dPi / dTj
+Parameters:
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
+    - i: int of current index to be calculated
+    - yBus: nd array of admittance matrix
+    - j: int of current denominator index
 '''
 def dpidtj(i, j, V, yBus, T):
     i = int(i)
@@ -349,6 +423,12 @@ def dpidtj(i, j, V, yBus, T):
 
 '''
 Function: calculate partial derivative dPi / dVi
+Parameters:
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
+    - i: int of current index to be calculated
+    - yBus: nd array of admittance matrix
+    - busnum: int of number of buses
 '''
 def dpidvi(i, V, yBus, T, busnum):
     i = int(i)
@@ -361,6 +441,12 @@ def dpidvi(i, V, yBus, T, busnum):
 
 '''
 Function: calculate partial derivative dPi / dQj
+Parameters:
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
+    - i: int of current index to be calculated
+    - yBus: nd array of admittance matrix
+    - j: int of current denominator index
 '''
 def dpidvj(i, j, V, yBus, T):
     i = int(i)
@@ -370,7 +456,12 @@ def dpidvj(i, j, V, yBus, T):
 
 '''
 Function: calculate partial derivative dQi / dTi
-
+Parameters:
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
+    - i: int of current index to be calculated
+    - yBus: nd array of admittance matrix
+    - busnum: int of number of buses
 '''
 def dqidti(i, V, yBus, T, busnum):
     i = int(i)
@@ -383,7 +474,12 @@ def dqidti(i, V, yBus, T, busnum):
 
 '''
 Function: calculate partial derivative dQi / dTj
-
+Parameters:
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
+    - i: int of current index to be calculated
+    - yBus: nd array of admittance matrix
+    - j: int of current denominator index
 '''
 def dqidtj(i, j, V, yBus, T):
     i = int(i)
@@ -393,6 +489,12 @@ def dqidtj(i, j, V, yBus, T):
 
 '''
 Function: calculate partial derivative dQi / dVi
+Parameters:
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
+    - i: int of current index to be calculated
+    - yBus: nd array of admittance matrix
+    - busnum: int of number of buses
 '''
 def dqidvi(i, V, yBus, T, busnum):
     i = int(i)
@@ -405,6 +507,12 @@ def dqidvi(i, V, yBus, T, busnum):
 
 '''
 Function: calculate partial derivative dQi / dVj
+Parameters:
+    - T: array of voltage theta values
+    - V: array of voltage magnitudes
+    - i: int of current index to be calculated
+    - yBus: nd array of admittance matrix
+    - j: int of current denominator index
 '''
 def dqidvj(i, j, V, yBus, T):
     i = int(i)
@@ -415,6 +523,11 @@ def dqidvj(i, j, V, yBus, T):
 
 '''
 Function: name jacobian element
+Parameters:
+    - xmat: matrix of Vs and Ts
+    - knowns: matrix of mismatch vector of Ps and Qs
+    - knownnum: int of total Ps and Qs known
+    - jacobian: matrix of jacobian
 '''
 def nameJacElem(knownnum, knowns, xmat, jacobian):
     for i in range(knownnum):
@@ -449,6 +562,13 @@ def nameJacElem(knownnum, knowns, xmat, jacobian):
 
 '''
 Function: calculate jacobian elements and update matrix
+Parameters:
+    - knownnum: int of total Ps and Qs known
+    - jacobian: matrix of jacobian
+    - yBus: nd array of admittance matrix
+    - t_list: array of voltage angles 
+    - v_list: array of voltage magnitudes
+    - busnum: int of number of buses
 '''
 def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
     for i in range(knownnum):
@@ -478,6 +598,13 @@ def calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum):
 
 '''
 Function: calculate jacobian elements and update matrix for DLF
+Parameters:
+    - knownnum: int of total Ps and Qs known
+    - jacobian: matrix of jacobian
+    - yBus: nd array of admittance matrix
+    - t_list: array of voltage angles 
+    - v_list: array of voltage magnitudes
+    - busnum: int of number of buses
 '''
 def calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum):
     for i in range(knownnum):
@@ -507,10 +634,23 @@ def calcJacElemsDLF(knownnum, jacobian, ybus, t_list, v_list, busnum):
 
 '''
 Function: iterate
-should update P, Q, known matrix, unknown matrix, and jacobian
+should update P, Q, known matrix, unknown matrix, and jacobian for newton-rhapson or decoupled
+Parameters: 
+    - knownnum: int of total Ps and Qs known
+    - jacobian: matrix of jacobian
+    - yBus: nd array of admittance matrix
+    - t_list: array of voltage angles 
+    - v_list: array of voltage magnitudes
+    - busnum: total number of buses
+    - xmat: matrix of Vs and Ts
+    - knowns: matrix of mismatch vector of Ps and Qs
+    - busnum: int of number of buses
+    - qnum: number
+
 '''
-def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum, num_lims, type):
-    #first calculate the jacobian matrix
+def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, type):
+    # first calculate the jacobian matrix
+    # decide which jacobian calculation to do if its newton raphson or decoupled
     if type == 'NR':
         calcJacElems(knownnum, jacobian, ybus, t_list, v_list, busnum)
     elif type == 'DLF':
@@ -522,30 +662,35 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
     net_injections = [0 for i in range(knownnum)]
     for i in range(knownnum):
         new_knowns[i] = knowns[i].val
+    #loop through all the elements in knowns matrix
     for i in range(knownnum):
         #for each known value, calculate the new value of P or Q and subtract them
         num = int(knowns[i].name[1])-1
         type = knowns[i].name[0]
         if type == 'P':
             #Note: change generating/not +/- for P and Q IN EXCEL
-            new_p = calcP(num, ybus, busnum, t_list, v_list) # calcPVal(num, ybus, busnum, t_list, v_list)
+            new_p = calcP(num, ybus, busnum, t_list, v_list)
+            # subtract net injection from the old value
             net_injections[i] = new_p
             new_knowns[i] = new_knowns[i] - new_p
         else:
             #Note: change generating/not +/- for P and Q IN EXCEL
-            new_q = calcQ(num, ybus, busnum, t_list, v_list) # calcQVal(num, ybus, busnum, t_list, v_list)
+            new_q = calcQ(num, ybus, busnum, t_list, v_list)
+            # subtract net injection from the old value
             net_injections[i] = new_q
             new_knowns[i] = new_knowns[i] - new_q
     print("Net Injections: ")
     for i in range(knownnum):
         print(knowns[i].name, ': ', net_injections[i])
 
-
+    #copy jacobian to be just the values
     temp_jac = [[0 for i in range(int(knownnum))] for j in range(int(knownnum))]
     for i in range(knownnum):
         for j in range(knownnum):
             temp_jac[i][j] = jacobian[i][j].val
+    #solve with the jacobian and the knowns matrix
     corrections = np.linalg.solve(temp_jac, new_knowns)
+    #add the corrections to the angles and magnitudes
     for j in range(knownnum):
         xmat[j].val += corrections[j]
         temp_num = int(xmat[j].name[1])
@@ -556,13 +701,8 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
             v_list[(temp_num-1)] = temp_val
         else:
             print("error thrown in updating v and t lists")
-    if num_lims>=1:
-        q_limit = [0 for i in range(num_lims)]
-        for i in range(num_lims):
-            q_limit[i] = calcQ(qnum[i]-1, ybus, busnum, t_list, v_list)
-    else:
-        q_limit = 0
 
+    #Print some things
     print("Jacobian: ")
     printMultiMat(knownnum, jacobian, True)
     print("Corrections Vector (dV, dT): ")
@@ -573,29 +713,31 @@ def iterate(knownnum, jacobian, ybus, t_list, v_list, knowns, xmat, busnum, qnum
     for i in range(busnum):
         print("|V|", i + 1, ": ", "{:.4f}".format(v_list[i]), "\t\t", "Theta", i + 1, ": ",
               "{:.4f}".format(t_list[i] * 180 / math.pi))
-
-    return corrections, q_limit
+    #return corrections for checking convergence
+    return corrections
 
 def loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, type):
+    #loop through iterations until convergence is met or we loop more than 10 times (error)
     convergence = False
     itno = 0
     while not (convergence or itno > 10):
         itno += 1
         print("\n\nIteration #" + str(itno))
-        outputs = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, 0, 0, type)
-        corrections = outputs[0]
+        corrections = iterate(knownnum, jacobian, yBus, t_list, v_list, knowns, xmat, busnum, type)
+
         # Check corrections matrix for convergence
         count = 0
         for i in range(corrections.size):
             if abs(corrections[i]) > conv_crit:
-                cur = abs(corrections[i])
                 count += 1
         convergence = count == 0
 
 
+
+
 '''
 Function: NR iterate loop with Q limits
-this function should loop through iterations of newton rhapson (or can be other if we change the jacobian method).
+this function should loop through iterations of newton rhapson with a reactive power limit. 
 Input parameters:
     - knowns - mismatch vector of knowns
     - knownum - number of Ps and Qs in knowns
@@ -605,13 +747,12 @@ Input parameters:
     - xmat - matrix of unkowns (angles and magnitudes)
     - busnum - total bus number
     - conv_crit - convergence criteria value
-    - p_list - list of active powers per bus
     - q_list - list of reactive powers per bus
     - q_lim - ARRAY of limit values (same length as q_list, but empty when theres no limit)
     - num_p
 '''
 
-def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, q_lim, num_p):
+def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, conv_crit, q_list, q_lim, num_p):
     convergence = False
     itno = 0
     P = np.zeros(busnum)
@@ -628,12 +769,13 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
         new_xmat[i].val = xmat[i].val
         new_knowns[i].name = knowns[i].name
         new_knowns[i].val = knowns[i].val
-
+    #create empty arrays for storing the indices of reactive power limit violations
     i_qlim_lower = []
     i_qlim_upper = []
+    #loop for convergence
     while not (convergence or itno>10):
         print("iteration numer: " + str(itno))
-        #calc all P/Q
+        #calc all current P/Q values and save in array
         for i in range(busnum):
             P[i] = calcP(i, yBus, busnum, t_list, v_list)
             Q[i] = calcQ(i, yBus, busnum, t_list, v_list)
@@ -780,7 +922,14 @@ def NR_iterate_loop_qlim(knowns, knownnum,yBus, t_list, v_list, xmat, busnum, co
                 count += 1
         convergence = count == 0
         itno += 1
-
+'''
+Function: Newton Raphson
+this loads all the values from excel and calls all the methods needed to solve power flow with newton raphson
+Parameters:
+    - conv_crit: float of convergence criteria
+    - qLimType: qlimit 'on' or 'none' for yes or no
+    - filename: string for excel
+'''
 def newtonRhapson(conv_crit, qlimType, filename):
     startNRTime = time.time()
     stuff = loadFile(filename)
@@ -823,9 +972,9 @@ def newtonRhapson(conv_crit, qlimType, filename):
     nameJacElem(knownnum, knowns, xmat, jacobian)
     if qlimType == 'none':
         loop_normal(knowns, knownnum, jacobian, yBus, t_list, v_list, xmat, busnum, conv_crit, 'NR')
-    elif qlimType == 'each':
+    elif qlimType == 'on':
         num_p = numT
-        NR_iterate_loop_qlim(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, p_list, q_list, q_lim,
+        NR_iterate_loop_qlim(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, q_list, q_lim,
                              num_p)
     else:
         print("error thrown in deciding reactive power limit iteration method, retype qlimtype")
@@ -1066,6 +1215,26 @@ def iterate_FDLF(knownnum, ybus, t_list, v_list, knowns, xmat, busnum, bp_inv, b
               "{:.4f}".format(t_list[i] * 180 / math.pi))
     return corrections
 
+'''
+Function: iterate fast decoupled load flow with reactive power limits
+iterate and loop until convergence to calc load flow with fast decoupled method. includes reactive power limits.
+Parameters:
+    - conv_crit: float of convergence criteria
+    - busnum: number of buses
+    - knownnum: int of total Ps and Qs known
+    - slackbus: array with indices of slack buses
+    - pvbus: array with indices of pv buses
+    - notype: array with indices of bus with no type
+    - xmat: matrix of Vs and Ts
+    - knowns: matrix of mismatch vector of Ps and Qs
+    - yBus: nd array of admittance matrix
+    - t_list: array of voltage angles 
+    - v_list: array of voltage magnitudes
+    - q_list: q vals
+    - q_lim: array of qlimits, NA if none for bus
+    - num_p: numper of P values
+    - type_it: type of iteration halfway or end of iteration update
+'''
 def iterate_fdlf_qlim(conv_crit, busnum, knownnum, slackbus, pvbus, notype, knowns, xmat, yBus, t_list, v_list, q_list, q_lim, num_p, type_it):
     i_qlim_upper=[]
     i_qlim_lower=[]
@@ -1192,8 +1361,23 @@ def iterate_fdlf_qlim(conv_crit, busnum, knownnum, slackbus, pvbus, notype, know
 """
 Function: normal loop for fast decoupled load flow
 iterates until convergence is met or the loop goes 10 times
+Parameters:
+    - knowns: matrix of mismatch vector of Ps and Qs
+    - knownnum: int of total Ps and Qs known
+    - yBus: nd array of admittance matrix
+    - t_list: array of voltage angles 
+    - v_list: array of voltage magnitudes
+    - xmat: matrix of Vs and Ts    
+    - busnum: number of buses    
+    - conv_crit: float of convergence criteria
+    - bp_inv: inverse of B' matrix
+    - bpp_inv: inverse of B'' matrix
+    - slackbus: array with indices of slack buses
+    - pvbus: array with indices of pv buses
+    - notype: array with indices of bus with no type
+    - type_it: type of iteration halfway or end of iteration update
 """
-def loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it, qlim_type, q_list, q_lim, num_p):
+def loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, type_it):
 
     convergence = False
     itno = 0
@@ -1210,8 +1394,9 @@ def loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_
                 count += 1
         convergence = count == 0
 
+
 """
-FunctionL fast deoucpled load flow b primes creation
+FunctionL fast decoupled load flow b primes creation
 makes the inverse B' and B'' for use in calculations
 Parameters:
     - filename - str for excel file
@@ -1267,6 +1452,11 @@ def fdlfBprimes(busnum, yBus, slackbus, pvbus, notype, i_qlim_lower, i_qlim_uppe
 '''
 Function: FastDecoupled
 performs Fast Decoupled load flow method
+Parameters:
+    - conv_crit: float of convergence criteria
+    - qlimType: string of 'on' or 'none' for including reactive power limits or not
+    - filename: string of filename for excel
+    - it_type: string of iteration type end or mid
 '''
 def fastDLF(conv_crit, qlimType, filename, it_type):
     startTimeFast = time.time()
@@ -1309,8 +1499,8 @@ def fastDLF(conv_crit, qlimType, filename, it_type):
     bp_inv, bpp_inv = fdlfBprimes(busnum, yBus, slackbus, pvbus, notype, [], [])
 
     if qlimType == 'none':
-        loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, it_type, qlimType, q_list, q_lim, numT)
-    elif qlimType == 'each':
+        loop_normal_FDLF(knowns, knownnum, yBus, t_list, v_list, xmat, busnum, conv_crit, bp_inv, bpp_inv, slackbus, pvbus, notype, it_type)
+    elif qlimType == 'on':
         iterate_fdlf_qlim(conv_crit, busnum, knownnum, slackbus, pvbus, notype, knowns, xmat, yBus, t_list, v_list, q_list, q_lim, numT, it_type)
     else:
         print("error in picking qlim type for fast decoupled")
@@ -1324,6 +1514,9 @@ def fastDLF(conv_crit, qlimType, filename, it_type):
 '''
 Function: decoupledLoadFlow
 algorithm with the Decoupled Load Flow method
+Parameters:
+    - conv_crit: float of convergence criteria
+    - filenameDLF: string of filename for excel
 '''
 def decoupledLoadFlow(conv_crit, filenameDLF):
     startTimeDecoup = time.time()
