@@ -3,16 +3,12 @@ from functions import *
 '''
 Main File for TET 4205 Power Flow final course project
 Fall 2023
-Study Group 2: 
-Grace DePietro
-Uxue Garciandia Irisarri
-Ximena Valles Novoa
-Anais Loque
+Study Group 2
 '''
 
 def main():
     # Change Filepath for use on personal computer
-    filepath = '/Users/gracedepietro/Desktop/4205/project/PowerFlow/'
+    filepath = ''
     # Change the convergence criteria
     conv_crit = 0.0000001
 
